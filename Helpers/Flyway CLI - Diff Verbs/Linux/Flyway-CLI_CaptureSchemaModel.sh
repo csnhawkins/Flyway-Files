@@ -42,13 +42,32 @@ flyway diff \
 -configFiles="$flywayProjectSettings" \
 -schemaModelLocation="$flywayProjectSchemaModel"
 
-echo "Flyway CLI - Outline Differences between $flywaySourceEnvironment and $flywayTargetEnvironment"
+echo "Script Validation - Check if any differences found"
 
-flyway diffText \
--diff.artifactFilename="$diffArtifactFilePath" \
--licenseKey="$flywayLicenseKey" \
--configFiles="$flywayProjectSettings" \
--schemaModelLocation="$flywayProjectSchemaModel"
+# Run the flyway command and check for "No differences found"
+if flyway diffText -diff.artifactFilename="$diffArtifactFilePath" \
+                   -licenseKey="$flywayLicenseKey" \
+                   -configFiles="$flywayProjectSettings" \
+                   -schemaModelLocation="$flywayProjectSchemaModel" \
+                   -outputType="" | grep -q "No differences to display"; then
+    echo "No differences found, stopping script."
+    # Remove Temporary Artifacts #
+    echo "Clean Up: Deleting temporary artifact files"
+    rm -r $diffArtifactFolder
+    exit 0  # Stop the script
+else
+    echo "Differences found, continuing script."
+    # Continue with the rest of your script
+fi
+
+# Uncomment below lines for detailed outline of pending changes in console # 
+# echo "Flyway CLI - Outline Differences between $flywaySourceEnvironment and $flywayTargetEnvironment"
+
+# flyway diffText \
+# -diff.artifactFilename="$diffArtifactFilePath" \
+# -licenseKey="$flywayLicenseKey" \
+# -configFiles="$flywayProjectSettings" \
+# -schemaModelLocation="$flywayProjectSchemaModel" || { echo 'Flyway CLI - fiffText Command Failed' ; exit 1; }
 
 echo "Flyway CLI - Apply Differences to Target Environment: $flywayTargetEnvironment"
 
