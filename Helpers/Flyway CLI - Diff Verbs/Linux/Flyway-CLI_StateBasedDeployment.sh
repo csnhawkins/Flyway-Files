@@ -4,6 +4,9 @@ echo "Flyway CLI - Automatic Schema Model Capture"
 # FLyway CLI - Global Settings #
 REDGATE_FLYWAY_DIFF_VERB="true" # Enables Alpha Diff Verbs within Flyway CLI
 export REDGATE_FLYWAY_DIFF_VERB # Exports to Environment Variable (Comment out if already set or not enough permissions)
+DIFFERENCE_DETAILS="false" # Set to true to enable enhanced console details for each pending difference
+DIFFERENCE_APPLY="true" # Set to true to apply pending changes to target. 
+
 # Flyway CLI - Project Settings # 
 flywayProjectName="Westwind" # Optional Project name used within reports and temp file naming
 flywayProjectPath="/mnt/c/Redgate/GIT/Repos/AzureDevOps/Westwind" # Ensure flyway.toml is explicitly referenced in filepath
@@ -58,41 +61,49 @@ else
     # Continue with the rest of your script
 fi
 
-# To do - Add check to see if there are any differences and if not, stop script here to avoid unncessary processing #
+# Show Additional Details Regarding Pending Differences #
+if [ $DIFFERENCE_DETAILS = "true" ]; then
+    echo "Flyway CLI - Outline Differences between $flywaySourceEnvironment and $flywayTargetEnvironment"
+    flyway diffText \
+    -diff.artifactFilename="$diffArtifactFilePath" \
+    -licenseKey="$flywayLicenseKey" \
+    -configFiles="$flywayProjectSettings" \
+    -schemaModelLocation="$flywayProjectSchemaModel" || { echo 'Flyway CLI - fiffText Command Failed' ; exit 1; }
+else
+    echo "Flyway CLI - Skipping Additional Differences Details Due to SHOW_DIFFERENCE_DETAILS variable set to false"
+fi
 
-# echo "Flyway CLI - Outline Differences between $flywaySourceEnvironment and $flywayTargetEnvironment"
+if [ "$DIFFERENCE_APPLY" != "true" ] ; then
+    echo "Flyway CLI - Generate Deployment Script For: $flywayTargetEnvironment"
+    flyway generate \
+    -generate.description="$flywayVersionDescription" \
+    -generate.location="$flywayProjectPath/Artifacts/" \
+    -generate.types="versioned,undo" \
+    -generate.artifactFilename="$diffArtifactFilePath" \
+    -outputType="" \
+    -generate.force="true" \
+    -licenseKey="$flywayLicenseKey" \
+    -configFiles="$flywayProjectSettings" \
+    -schemaModelLocation="$flywayProjectSchemaModel" || { echo 'Flyway CLI - Generate Command Failed' ; exit 1; }
+else
+    echo "Flyway CLI - Skipping Dry Run Script Generation Stage Due to DIFFERENCE_APPLY variable set to false"
+fi
 
-# flyway diffText \
-# -diff.artifactFilename="$diffArtifactFilePath" \
-# -licenseKey="$flywayLicenseKey" \
-# -configFiles="$flywayProjectSettings" \
-# -schemaModelLocation="$flywayProjectSchemaModel" || { echo 'Flyway CLI - fiffText Command Failed' ; exit 1; }
-
-echo "Flyway CLI - Generate Deployment Script For: $flywayTargetEnvironment"
-
-flyway generate \
--generate.description="$flywayVersionDescription" \
--generate.location="$flywayProjectPath/Artifacts/" \
--generate.types="versioned,undo" \
--generate.artifactFilename="$diffArtifactFilePath" \
--outputType="" \
--generate.force="true" \
--licenseKey="$flywayLicenseKey" \
--configFiles="$flywayProjectSettings" \
--schemaModelLocation="$flywayProjectSchemaModel" || { echo 'Flyway CLI - Generate Command Failed' ; exit 1; }
-
-echo "Flyway CLI - Apply Differences to Target Environment: $flywayTargetEnvironment"
-
-flyway diffApply \
--diffApply.target="$flywayTargetEnvironment" \
--environments.$flywayTargetEnvironment.url="$flywayTargetJDBC" \
--environments.$flywayTargetEnvironment.user="$flywayTargetUsername" \
--environments.$flywayTargetEnvironment.password="$flywayTargetPassword" \
--diffApply.artifactFilename="$diffArtifactFilePath" \
--outputType="" \
--licenseKey="$flywayLicenseKey" \
--configFiles="$flywayProjectSettings" \
--schemaModelLocation="$flywayProjectSchemaModel" || { echo 'Flyway CLI - diffApply Command Failed' ; exit 1; }
+if [ "$DIFFERENCE_APPLY" = "true" ] ; then
+    echo "Flyway CLI - Apply Differences to Target Environment: $flywayTargetEnvironment"
+    flyway diffApply \
+    -diffApply.target="$flywayTargetEnvironment" \
+    -environments.$flywayTargetEnvironment.url="$flywayTargetJDBC" \
+    -environments.$flywayTargetEnvironment.user="$flywayTargetUsername" \
+    -environments.$flywayTargetEnvironment.password="$flywayTargetPassword" \
+    -diffApply.artifactFilename="$diffArtifactFilePath" \
+    -outputType="" \
+    -licenseKey="$flywayLicenseKey" \
+    -configFiles="$flywayProjectSettings" \
+    -schemaModelLocation="$flywayProjectSchemaModel" || { echo 'Flyway CLI - diffApply Command Failed' ; exit 1; }
+else
+    echo "Flyway CLI - Skipping Deployment Stage Due to DIFFERENCE_APPLY variable set to false"
+fi
 
 # Remove Temporary Artifacts #
 echo "Clean Up: Deleting temporary artifact files"

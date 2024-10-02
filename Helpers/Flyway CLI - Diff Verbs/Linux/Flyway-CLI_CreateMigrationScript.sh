@@ -4,6 +4,8 @@ echo "Flyway CLI - Automatic Schema Model Capture"
 # FLyway CLI - Global Settings #
 REDGATE_FLYWAY_DIFF_VERB="true" # Enables Alpha Diff Verbs within Flyway CLI
 export REDGATE_FLYWAY_DIFF_VERB # Exports to Environment Variable (Comment out if already set or not enough permissions)
+DIFFERENCE_DETAILS="true" # Set to true to enable enhanced console details for each pending difference
+
 # Flyway CLI - Project Settings # 
 flywayProjectName="Westwind" # Optional Project name used within reports and temp file naming
 flywayProjectPath="/mnt/c/Redgate/GIT/Repos/AzureDevOps/Westwind" # Ensure flyway.toml is explicitly referenced in filepath
@@ -64,14 +66,17 @@ else
     # Continue with the rest of your script
 fi
 
-# # Uncomment below lines for detailed outline of pending changes in console # 
-# echo "Flyway CLI - Outline Differences between $flywaySourceEnvironment and $flywayTargetEnvironment"
-
-# flyway diffText \
-# -diff.artifactFilename="$diffArtifactFilePath" \
-# -licenseKey="$flywayLicenseKey" \
-# -configFiles="$flywayProjectSettings" \
-# -schemaModelLocation="$flywayProjectSchemaModel" || { echo 'Flyway CLI - fiffText Command Failed' ; exit 1; }
+# Show Additional Details Regarding Pending Differences #
+if [ "$DIFFERENCE_DETAILS" = "true" ]; then
+    echo "Flyway CLI - Outline Differences between $flywaySourceEnvironment and $flywayTargetEnvironment"
+    flyway diffText \
+    -diff.artifactFilename="$diffArtifactFilePath" \
+    -licenseKey="$flywayLicenseKey" \
+    -configFiles="$flywayProjectSettings" \
+    -schemaModelLocation="$flywayProjectSchemaModel" || { echo 'Flyway CLI - fiffText Command Failed' ; exit 1; }
+else
+    echo "Flyway CLI - Skipping Additional Differences Details Due to SHOW_DIFFERENCE_DETAILS variable set to false"
+fi
 
 echo "Flyway CLI - Generate Deployment Script For: $flywayTargetEnvironment"
 
