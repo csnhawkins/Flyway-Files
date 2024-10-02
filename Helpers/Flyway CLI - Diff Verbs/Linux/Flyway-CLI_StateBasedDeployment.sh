@@ -17,8 +17,8 @@ flywaySourceEnvironment="schemaModel" # Options can be schemaModel, migrations, 
 flywaySourceJDBC="" # Optional - Leave blank to use Environment settings
 flywaySourceUsername="" # Optional - Can be used to specify database UserName is WindowsAuth or similar not utilized for the environment
 flywaySourcePassword="" # Optional - Can be used to specify database password is WindowsAuth or similar not utilized for the environment
-flywayTargetEnvironment="production" # Options can be schemaModel, migrations, snapshot, empty, <<environment name>>
-flywayTargetJDBC="jdbc:sqlserver://127.0.0.1;databaseName=Westwind_Prod;encrypt=true;integratedSecurity=false;trustServerCertificate=true" # Optional - Leave blank to use Environment settings
+flywayTargetEnvironment="Build" # Options can be schemaModel, migrations, snapshot, empty, <<environment name>>
+flywayTargetJDBC="jdbc:sqlserver://127.0.0.1;databaseName=Westwind_Build;encrypt=true;integratedSecurity=false;trustServerCertificate=true" # Optional - Leave blank to use Environment settings
 flywayTargetUsername="sa" # Optional - Can be used to specify database UserName is WindowsAuth or similar not utilized for the environment
 flywayTargetPassword="Redg@te1" # Optional - Can be used to specify database password is WindowsAuth or similar not utilized for the environment
 
@@ -28,9 +28,9 @@ diffArtifactFilePath="$diffArtifactFolder/$diffArtifactFileName"
 
 echo "Project Path = $flywayProjectPath | Settings are $flywayProjectSettings"
 
-echo "Flyway CLI - Detect Differences between $flywaySourceEnvironment and $flywayTargetEnvironment"
+echo "Flyway CLI - Detecting Differences between $flywaySourceEnvironment and $flywayTargetEnvironment"
 
-flyway diff \
+diffList=$(flyway diff \
 -diff.source="$flywaySourceEnvironment" \
 -diff.target="$flywayTargetEnvironment" \
 -environments.$flywayTargetEnvironment.url="$flywayTargetJDBC" \
@@ -40,16 +40,14 @@ flyway diff \
 -outputType="" \
 -licenseKey="$flywayLicenseKey" \
 -configFiles="$flywayProjectSettings" \
--schemaModelLocation="$flywayProjectSchemaModel" || { echo 'Flyway CLI - Diff Command Failed' ; exit 1; }
+-schemaModelLocation="$flywayProjectSchemaModel" || { echo 'Flyway CLI - Diff Command Failed' ; exit 1; })
+
+echo "$diffList"
 
 echo "Script Validation - Check if any differences found"
 
 # Run the flyway command and check for "No differences found"
-if flyway diffText -diff.artifactFilename="$diffArtifactFilePath" \
-                   -licenseKey="$flywayLicenseKey" \
-                   -configFiles="$flywayProjectSettings" \
-                   -schemaModelLocation="$flywayProjectSchemaModel" \
-                   -outputType="" | grep -q "No differences to display"; then
+if echo "$diffList" | grep -q "No differences found"; then
     echo "No differences found, stopping script."
     # Remove Temporary Artifacts #
     echo "Clean Up: Deleting temporary artifact files"
@@ -62,13 +60,13 @@ fi
 
 # To do - Add check to see if there are any differences and if not, stop script here to avoid unncessary processing #
 
-echo "Flyway CLI - Outline Differences between $flywaySourceEnvironment and $flywayTargetEnvironment"
+# echo "Flyway CLI - Outline Differences between $flywaySourceEnvironment and $flywayTargetEnvironment"
 
-flyway diffText \
--diff.artifactFilename="$diffArtifactFilePath" \
--licenseKey="$flywayLicenseKey" \
--configFiles="$flywayProjectSettings" \
--schemaModelLocation="$flywayProjectSchemaModel" || { echo 'Flyway CLI - fiffText Command Failed' ; exit 1; }
+# flyway diffText \
+# -diff.artifactFilename="$diffArtifactFilePath" \
+# -licenseKey="$flywayLicenseKey" \
+# -configFiles="$flywayProjectSettings" \
+# -schemaModelLocation="$flywayProjectSchemaModel" || { echo 'Flyway CLI - fiffText Command Failed' ; exit 1; }
 
 echo "Flyway CLI - Generate Deployment Script For: $flywayTargetEnvironment"
 

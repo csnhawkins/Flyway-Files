@@ -34,7 +34,7 @@ echo "Project Path = $flywayProjectPath | Settings are $flywayProjectSettings"
 
 echo "Flyway CLI - Detect Differences between $flywaySourceEnvironment and $flywayTargetEnvironment"
 
-flyway diff \
+diffList=$(flyway diff \
 -diff.source="$flywaySourceEnvironment" \
 -diff.target="$flywayTargetEnvironment" \
 -diff.buildEnvironment="$flywayBuildEnvironment" \
@@ -46,16 +46,14 @@ flyway diff \
 -licenseKey="$flywayLicenseKey" \
 -configFiles="$flywayProjectSettings" \
 -schemaModelLocation="$flywayProjectSchemaModel" \
--locations=filesystem:"$flywayProjectMigrations" || { echo 'Flyway CLI - Diff Command Failed' ; exit 1; }
+-locations=filesystem:"$flywayProjectMigrations" || { echo 'Flyway CLI - Diff Command Failed' ; exit 1; })
+
+echo "$diffList"
 
 echo "Script Validation - Check if any differences found"
 
 # Run the flyway command and check for "No differences found"
-if flyway diffText -diff.artifactFilename="$diffArtifactFilePath" \
-                   -licenseKey="$flywayLicenseKey" \
-                   -configFiles="$flywayProjectSettings" \
-                   -schemaModelLocation="$flywayProjectSchemaModel" \
-                   -outputType="" | grep -q "No differences to display"; then
+if echo "$diffList" | grep -q "No differences found"; then
     echo "No differences found, stopping script."
     # Remove Temporary Artifacts #
     echo "Clean Up: Deleting temporary artifact files"
