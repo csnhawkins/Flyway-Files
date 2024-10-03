@@ -1,0 +1,296 @@
+name: Flyway-AutoPilot-Simple-Pipeline-Linux
+
+trigger: none
+#   branches:
+#     include:
+#       - release
+#   paths:
+#     include:
+#       - migrations/*
+
+pool:
+  #name: "default" # To be set when a self-hosted agent pool is to be used alongside this pipeline
+  vmImage: "ubuntu-latest" # To be used when a microsoft-hosted agent is used alongside this pipeline (Such as ubuntu-latest)
+
+variables:
+
+  # This is the relative path to the migrations folder in your project, such as:
+  # $(System.DefaultWorkingDirectory)\project
+  # The default is to have the migrations folder in the same directory as the yml file
+  WORKING_DIRECTORY: $(System.DefaultWorkingDirectory)
+  system.debug: false # Set this to true to enable verbose logging on your pipeline run
+  
+  # Optional: Side Task #2 -For added security, the below could be added to a variable group and marked as secure. Try this out in future once you get the pipeline running.
+  group: "AutoPilot"
+  FLYWAY_PROJECT_NAME: AutoPilot
+  FLYWAY_LICENSE_KEY: "" # Set this as a secure variable
+
+  # Optional - For Microsoft Hosted Agents, it's necessary to ensure Flyway is installed on each run. Therefore, the below variables are required
+  FLYWAY_CLI_INSTALL_CHECK: "true" # Setting to false will skip the Flyway CLI check step
+  FLYWAY_VERSION: "10.18.2" # This outlines the version of Flyway CLI that will be downloaded if no Flyway CLI is detected on the target agent
+  REDGATE_FLYWAY_DIFF_VERB: "true" # Enables Alpha Diff Verbs within Flyway CLI
+
+stages:
+  - stage: Build # Tip - The build stage is a great way of gaining quick early feedback about upcoming releases. It simply needs to point to an empty database to function.
+    displayName: Build Stage 
+    jobs:
+    - job: Build
+      variables: # Tip - For sensitive variables, these can be made into a secret by clicking the Variables button in top right corner of the YAML pipeline editor.
+        DATABASE_NAME: "MyDatabaseNameHere" # Name of the target database. In this case an empty disposable database we can use for build testing.
+        SOURCE_ENVIRONMENT: "schemaModel"
+        SOURCE_JDBC: ""
+        SOURCE_DATABASE_USERNAME: ""
+        SOURCE_DATABASE_PASSWORD: ""
+        TARGET_ENVIRONMENT: "Build" # This variable refers to the environment name present in the Flyway Projects TOML file. Use Flyway Desktop to check and change this value if required.
+        TARGET_JDBC: "jdbc:sqlserver://MyHostMachineNameHere;authentication=sqlPassword;databaseName=MyDatabaseNameHere;encrypt=true;trustServerCertificate=true"
+        TARGET_DATABASE_USERNAME: "Redgate" # Optional - If SQL Authentication is used, provide the relevant database username. Otherwise, leave blank
+        TARGET_DATABASE_PASSWORD: MyPasswordHere" # Optional - If SQL Authentication is used, provide the relevant database password. Otherwise, leave blank
+        FLYWAY_VERSION_DESCRIPTION: "FlywayCLIAutomatedScript"
+        executeBuild: true # Turn to false to skip the build stage tasks
+        DEPLOY_DIFFERENCES: "true"
+      #- group: redgate_build_vars # Sensitive variables can also be setup in a stage level Variable Group, once set they can be linked by pointing to the group as follows.
+
+      steps:
+        # Pre-Req - Check if Flyway CLI Installed and Available on Agent
+        - script: |
+            if flyway --help ; then
+              ech "Flyway Installed and Available"
+            else 
+              echo "Flyway Not Installed - Downloading and Configuring Now"
+              wget -qO- https://download.red-gate.com/maven/release/com/redgate/flyway/flyway-commandline/$(FLYWAY_VERSION)/flyway-commandline-$(FLYWAY_VERSION)-linux-x64.tar.gz | tar -xvz && sudo ln -s `pwd`/flyway-$(FLYWAY_VERSION)/flyway /usr/local/bin 
+            fi
+          displayName: 'Flyway CLI - Install Check'
+          condition: eq(variables['FLYWAY_CLI_INSTALL_CHECK'], true)
+        # Step 1 - Flyway CLI - State Based Deployment Script
+        - script: |
+            sh $(WORKING_DIRECTORY)/Scripts/Flyway-CLI_StateBasedDeployment.sh
+          continueOnError: false
+          workingDirectory: '$(WORKING_DIRECTORY)'
+          displayName: 'Flyway CLI - State Based Deployment Script'
+          condition: eq(variables['executeBuild'], true)
+          env:
+            FLYWAY_CLEAN_DISABLED: false # This should only be disabled for temporary sandbox databases, like Build
+
+        - task: CopyFiles@2
+          inputs:
+            SourceFolder: '$(WORKING_DIRECTORY)'
+            Contents: |
+              !flyway-*/**/*
+              !.git/**/*
+              !.git*/**/*
+              **/Artifacts/**/*
+              **/Scripts/**/*
+              **/schema-model/**/*
+              **/backups/**/*
+              **/flyway.toml
+              **/Filter.scpf
+            TargetFolder: '$(System.ArtifactsDirectory)'
+
+        - task: PublishBuildArtifacts@1 # This step publishes all the validated Flyway Project files as a build artifact
+          displayName: 'Publish Build Artifact'
+          continueOnError: true
+          inputs:
+            ArtifactName: 'Flyway-CI-$(Build.BuildId)'
+            PathtoPublish: '$(System.ArtifactsDirectory)'
+
+  - stage: Test
+    displayName: Test Stage
+    dependsOn: Build
+    variables: # Tip - For sensitive variables, these can be made into a secret by clicking the Variables button in top right corner of the YAML pipeline editor.
+      WORKING_DIRECTORY: "$(System.ArtifactsDirectory)/Flyway-CI-$(Build.BuildId)" # Setting new Artifact specific location
+      DATABASE_NAME: "MyDatabaseNameHere" # Name of the target database. In this case an empty disposable database we can use for build testing.
+      SOURCE_ENVIRONMENT: "schemaModel"
+      SOURCE_JDBC: ""
+      SOURCE_DATABASE_USERNAME: ""
+      SOURCE_DATABASE_PASSWORD: ""
+      TARGET_ENVIRONMENT: "Test" # This variable refers to the environment name present in the Flyway Projects TOML file. Use Flyway Desktop to check and change this value if required.
+      TARGET_JDBC: "jdbc:sqlserver://MyHostMachineNameHere;authentication=sqlPassword;databaseName=MyDatabaseNameHere;encrypt=true;trustServerCertificate=true"
+      TARGET_DATABASE_USERNAME: "Redgate" # Optional - If SQL Authentication is used, provide the relevant database username. Otherwise, leave blank
+      TARGET_DATABASE_PASSWORD: "MyPasswordHere" # Optional - If SQL Authentication is used, provide the relevant database password. Otherwise, leave blank
+      FLYWAY_VERSION_DESCRIPTION: "FlywayCLIAutomatedScript"
+      pauseForCodeReview: "true"
+      generateReport: true                     #Turn on to enable the Check Report
+      #- group: ${{stage.variableGroupName}}
+    jobs:
+    - job: ChangeReport
+      displayName: "Flyway - Pre Release Change Report"
+      condition: eq(variables['generateReport'], true)
+      variables:
+        DEPLOY_DIFFERENCES: "false"
+      #- group: ${{stage.variableGroupName}}
+      #- group: pipeline_flyway_vars
+      steps:
+        # Pre-Req - Check if Flyway CLI Installed and Available on Agent
+        - script: |
+            if flyway --help ; then
+              ech "Flyway Installed and Available"
+            else 
+              echo "Flyway Not Installed - Downloading and Configuring Now"
+              wget -qO- https://download.red-gate.com/maven/release/com/redgate/flyway/flyway-commandline/$(FLYWAY_VERSION)/flyway-commandline-$(FLYWAY_VERSION)-linux-x64.tar.gz | tar -xvz && sudo ln -s `pwd`/flyway-$(FLYWAY_VERSION)/flyway /usr/local/bin 
+            fi
+          displayName: 'Flyway CLI - Install Check'
+          condition: eq(variables['FLYWAY_CLI_INSTALL_CHECK'], true)
+        - task: DownloadBuildArtifacts@0
+          inputs:
+            buildType: 'current'
+            downloadType: 'single'
+            artifactName: 'Flyway-CI-$(Build.BuildId)'
+            downloadPath: '$(System.ArtifactsDirectory)'
+        
+        - script: |
+             sh $(WORKING_DIRECTORY)/Scripts/Flyway-CLI_StateBasedDeployment.sh
+          workingDirectory: '$(WORKING_DIRECTORY)'
+          continueOnError: false
+          displayName: 'Flyway CLI - Create Deployment Script'
+        
+        - task: PublishBuildArtifacts@1
+          displayName: 'Publish Deployment Script'
+          condition: always()
+          inputs:
+            ArtifactName: 'Flyway-CD-Reports-$(Build.BuildId)'
+            PathtoPublish: '$(System.ArtifactsDirectory)/Flyway-CI-$(Build.BuildId)/Artifacts/'
+
+    - job: CodeReview
+      displayName: Code Review
+      dependsOn: ChangeReport
+      pool: server
+      steps:
+        - task: ManualValidation@0
+          condition: eq(variables['pauseForCodeReview'], true)
+          displayName: 'Review Change Report Prior To Release'
+          timeoutInMinutes: 4320 
+          inputs:
+            notifyUsers: |
+              user@email.com
+              example@example.com
+            instructions: 'Review changes'
+        
+    - job: Deploy
+      displayName: "Deploy"
+      dependsOn: CodeReview
+      variables:
+        DEPLOY_DIFFERENCES: "true"
+      steps:
+          # Pre-Req - Check if Flyway CLI Installed and Available on Agent
+        - script: |
+            if flyway --help ; then
+              ech "Flyway Installed and Available"
+            else 
+              echo "Flyway Not Installed - Downloading and Configuring Now"
+              wget -qO- https://download.red-gate.com/maven/release/com/redgate/flyway/flyway-commandline/$(FLYWAY_VERSION)/flyway-commandline-$(FLYWAY_VERSION)-linux-x64.tar.gz | tar -xvz && sudo ln -s `pwd`/flyway-$(FLYWAY_VERSION)/flyway /usr/local/bin 
+            fi
+          displayName: 'Flyway CLI - Install Check'
+          condition: eq(variables['FLYWAY_CLI_INSTALL_CHECK'], true)
+        - task: DownloadBuildArtifacts@0
+          inputs:
+            buildType: 'current'
+            downloadType: 'single'
+            artifactName: 'Flyway-CI-$(Build.BuildId)'
+            downloadPath: '$(System.ArtifactsDirectory)'
+        - script: |
+            sh $(WORKING_DIRECTORY)/Scripts/Flyway-CLI_StateBasedDeployment.sh
+          continueOnError: false
+          workingDirectory: '$(WORKING_DIRECTORY)'
+          displayName: 'Flyway CLI - Deploy Differences'
+          condition:
+
+  - stage: Prod
+    displayName: Prod Stage
+    dependsOn: Test
+    variables: # Tip - For sensitive variables, these can be made into a secret by clicking the Variables button in top right corner of the YAML pipeline editor.
+      WORKING_DIRECTORY: "$(System.ArtifactsDirectory)/Flyway-CI-$(Build.BuildId)" # Setting new Artifact specific location
+      DATABASE_NAME: "MyDatabaseNameHere" # Name of the target database. In this case an empty disposable database we can use for build testing.
+      SOURCE_ENVIRONMENT: "schemaModel"
+      SOURCE_JDBC: ""
+      SOURCE_DATABASE_USERNAME: ""
+      SOURCE_DATABASE_PASSWORD: ""
+      TARGET_ENVIRONMENT: "Prod" # This variable refers to the environment name present in the Flyway Projects TOML file. Use Flyway Desktop to check and change this value if required.
+      TARGET_JDBC: "jdbc:sqlserver://MyHostMachineNameHere;authentication=sqlPassword;databaseName=MyDatabaseNameHere;encrypt=true;trustServerCertificate=true"
+      TARGET_DATABASE_USERNAME: "Redgate" # Optional - If SQL Authentication is used, provide the relevant database username. Otherwise, leave blank
+      TARGET_DATABASE_PASSWORD: "MyPasswordHere" # Optional - If SQL Authentication is used, provide the relevant database password. Otherwise, leave blank
+      FLYWAY_VERSION_DESCRIPTION: "FlywayCLIAutomatedScript"
+      pauseForCodeReview: "true"
+      generateReport: true                     #Turn on to enable the Check Report
+      #- group: ${{stage.variableGroupName}}
+    jobs:
+    - job: ChangeReport
+      displayName: "Flyway - Pre Release Change Report"
+      condition: eq(variables['generateReport'], true)
+      variables:
+        DEPLOY_DIFFERENCES: "false"
+      #- group: ${{stage.variableGroupName}}
+      #- group: pipeline_flyway_vars
+      steps:
+        # Pre-Req - Check if Flyway CLI Installed and Available on Agent
+        - script: |
+            if flyway --help ; then
+              ech "Flyway Installed and Available"
+            else 
+              echo "Flyway Not Installed - Downloading and Configuring Now"
+              wget -qO- https://download.red-gate.com/maven/release/com/redgate/flyway/flyway-commandline/$(FLYWAY_VERSION)/flyway-commandline-$(FLYWAY_VERSION)-linux-x64.tar.gz | tar -xvz && sudo ln -s `pwd`/flyway-$(FLYWAY_VERSION)/flyway /usr/local/bin 
+            fi
+          displayName: 'Flyway CLI - Install Check'
+          condition: eq(variables['FLYWAY_CLI_INSTALL_CHECK'], true)
+        - task: DownloadBuildArtifacts@0
+          inputs:
+            buildType: 'current'
+            downloadType: 'single'
+            artifactName: 'Flyway-CI-$(Build.BuildId)'
+            downloadPath: '$(System.ArtifactsDirectory)'
+        
+        - script: |
+            sh $(WORKING_DIRECTORY)/Scripts/Flyway-CLI_StateBasedDeployment.sh
+          workingDirectory: '$(WORKING_DIRECTORY)'
+          continueOnError: false
+          displayName: 'Flyway CLI - Create Deployment Script'
+        
+        - task: PublishBuildArtifacts@1
+          displayName: 'Publish Deployment Script'
+          condition: always()
+          inputs:
+            ArtifactName: 'Flyway-CD-Reports-$(Build.BuildId)'
+            PathtoPublish: '$(System.ArtifactsDirectory)/Flyway-CI-$(Build.BuildId)/Artifacts/'
+
+    - job: CodeReview
+      displayName: Code Review
+      dependsOn: ChangeReport
+      pool: server
+      steps:
+        - task: ManualValidation@0
+          condition: eq(variables['pauseForCodeReview'], true)
+          displayName: 'Review Change Report Prior To Release'
+          timeoutInMinutes: 4320 
+          inputs:
+            notifyUsers: |
+              user@email.com
+              example@example.com
+            instructions: 'Review changes'
+        
+    - job: Deploy
+      displayName: "Deploy"
+      dependsOn: CodeReview
+      variables:
+        DEPLOY_DIFFERENCES: "true"
+      steps:
+          # Pre-Req - Check if Flyway CLI Installed and Available on Agent
+        - script: |
+            if flyway --help ; then
+              ech "Flyway Installed and Available"
+            else 
+              echo "Flyway Not Installed - Downloading and Configuring Now"
+              wget -qO- https://download.red-gate.com/maven/release/com/redgate/flyway/flyway-commandline/$(FLYWAY_VERSION)/flyway-commandline-$(FLYWAY_VERSION)-linux-x64.tar.gz | tar -xvz && sudo ln -s `pwd`/flyway-$(FLYWAY_VERSION)/flyway /usr/local/bin 
+            fi
+          displayName: 'Flyway CLI - Install Check'
+          condition: eq(variables['FLYWAY_CLI_INSTALL_CHECK'], true)
+        - task: DownloadBuildArtifacts@0
+          inputs:
+            buildType: 'current'
+            downloadType: 'single'
+            artifactName: 'Flyway-CI-$(Build.BuildId)'
+            downloadPath: '$(System.ArtifactsDirectory)'
+        - script: |
+            sh $(WORKING_DIRECTORY)/Scripts/Flyway-CLI_StateBasedDeployment.sh
+          continueOnError: false
+          workingDirectory: '$(WORKING_DIRECTORY)'
+          displayName: 'Flyway CLI - Deploy Differences'
+          condition:
