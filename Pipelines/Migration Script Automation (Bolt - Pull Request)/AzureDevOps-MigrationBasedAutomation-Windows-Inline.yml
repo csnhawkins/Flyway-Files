@@ -1,0 +1,369 @@
+name: Flyway-Simple-Migration-Automation-Pipeline-Windows
+
+trigger:
+  branches:
+    include:
+      -
+  paths:
+    include:
+      - migrations/*
+
+pool:
+  name: "Local Laptop" # To be set when a self-hosted agent pool is to be used alongside this pipeline
+  #vmImage: "" # To be used when a microsoft-hosted agent is used alongside this pipeline (Such as ubuntu-latest/windows-latest)
+
+variables:
+
+  # This is the relative path to the migrations folder in your project, such as:
+  # $(System.DefaultWorkingDirectory)\project
+  # The default is to have the migrations folder in the same directory as the yml file
+  WORKING_DIRECTORY: $(System.DefaultWorkingDirectory)
+  system.debug: true # Set this to true to enable verbose logging on your pipeline run
+  
+  # Variables in Library Groups - To keep variables secure and repeatable, library groups can be used.
+  group: "redgate_global_vars" # Variables Expected - FLYWAY_LICENSE_KEY/FLYWAY_VERSION_DESCRIPTION
+  # FLYWAY_LICENSE_KEY: "" # Set in Library Group 'redgate_global_vars', enable this variable if in plaintext
+  # FLYWAY_VERSION_DESCRIPTION "FlywayCLIAutomatedScript" # Set in Library Group 'redgate_global_vars', enable this variable if in plaintext
+
+  # Optional - For Microsoft Hosted Agents, it's necessary to ensure Flyway is installed on each run. Therefore, the below variables are required
+  FLYWAY_CLI_INSTALL_CHECK: "false" # Setting to false will skip the Flyway CLI check step
+  FLYWAY_VERSION: "10.18.2" # This outlines the version of Flyway CLI that will be downloaded if no Flyway CLI is detected on the target agent
+  REDGATE_FLYWAY_DIFF_VERB: "true" # Enables Alpha Diff Verbs within Flyway CLI
+
+  # Optional: Side Task #1 - Setup Flyway Pipeline Integration - https://flyway.red-gate.com/ For More Details
+  FLYWAY_PUBLISH_RESULT: "true" # Set this value to true to enable Flyway Pipelines and track your releases centrally!
+  # FLYWAY_PIPELINES_EMAIL: "" # Set in Library Group 'redgate_global_vars', enable this variable if you prefer plaintext
+  # FLYWAY_PIPELINES_TOKEN: "" # Set in Library Group 'redgate_global_vars', enable this variable if you prefer plaintext
+
+stages:
+  - stage: Build # Tip - The build stage is a great way of gaining quick early feedback about upcoming releases. It simply needs to point to an empty database to function.
+    displayName: Build Stage 
+    jobs:
+    - job: Build
+      variables: # Tip - For sensitive variables, placing these in a Library Variable Group is preferred
+        # Variables Expected - FLYWAY_LICENSE_KEY/FLYWAY_VERSION_DESCRIPTION
+      - group: redgate_global_vars
+        # Variables Expected - BUILD_DATABASE_JDBC/BUILD_DATABASE_USER/BUILD_DATABASE_PASSWORD/TARGET_DATABASE_JDBC/TARGET_DATABASE_USER/TARGET_DATABASE_PASSWORD
+      - group: redgate_build_vars # 
+      - name: DATABASE_NAME
+        value: "AutoPilotBuild" # Name of the target database. In this case an empty disposable database we can use for build testing.
+      - name: FLYWAY_PROJECT_PATH
+        value: "$(WORKING_DIRECTORY)"
+      - name: TARGET_ENVIRONMENT
+        value: "build" # This variable refers to the environment name present in the Flyway Projects TOML file. Use Flyway Desktop to check and change this value if required.
+      - name: BUILD_ENVIRONMENT
+        value: "build" # This variable refers to the environment name present in the Flyway Projects TOML file. Use Flyway Desktop to check and change this value if required.
+      - name: executeBuild
+        value: true # Turn to false to skip the build stage tasks
+      steps:
+        - checkout: self
+          name: source
+          persistCredentials: true
+          clean: true
+
+        # Pre-Req - Check if Flyway CLI Installed and Available on Agent
+        - task: PowerShell@2
+          displayName: 'Flyway CLI - Install Check'
+          condition: eq(variables['FLYWAY_CLI_INSTALL_CHECK'], true)
+          inputs:
+            targetType: 'inline'
+            script: |
+                    $scriptPath = "$(WORKING_DIRECTORY)/scripts/Flyway_DownloadAndInstallCLI.ps1"
+                    if (Test-Path $scriptPath) {
+                      Write-Host "Script found. Running Flyway_DownloadAndInstallCLI.ps1..."
+                      & $scriptPath
+                      Write-Host "Updating PATH environment variable to include Flyway CLI Path"
+                        Write-Host "##vso[task.prependpath]C:\FlywayCLI\flyway-$(FLYWAY_VERSION)"
+                    } 
+                    else {
+                      Write-Host "Error: Script not found at path $scriptPath"
+                      exit 1
+                    }
+        # Step 1- Create Diff Artifact from Schema Model Directory #
+        - task: PowerShell@2
+          displayName: 'Flyway CLI - Create Diff Artifact'
+          inputs:
+            targetType: 'inline'
+            script: |
+              flyway diff `
+              "-diff.source=SchemaModel" `
+              "-diff.target=migrations" `
+              "-diff.buildEnvironment=$(BUILD_ENVIRONMENT)" `
+              "-environments.$(BUILD_ENVIRONMENT).user=$(BUILD_DATABASE_USER)" `
+              "-environments.$(BUILD_ENVIRONMENT).password=$(BUILD_DATABASE_PASSWORD)" `
+              "-environments.$(BUILD_ENVIRONMENT).provisioner=clean" `
+              "-diff.artifactFilename=$(System.ArtifactsDirectory)\Artifacts\Flyway.$(DATABASE_NAME).differences-$(get-date -f yyyyMMdd).zip" `
+              -outputType="" `
+              -licenseKey="$(FLYWAY_LICENSE_KEY)" `
+              -configFiles="$(WORKING_DIRECTORY)\flyway.toml" `
+              -schemaModelLocation="$(WORKING_DIRECTORY)\schema-model\" `
+              -locations="filesystem:$(WORKING_DIRECTORY)\migrations"
+            pwsh: false
+          continueOnError: false
+          condition: eq(variables['executeBuild'], true)
+          # env:
+          #   TARGET_DATABASE_JDBC: "" # Task Variables can also be passed if Library Group method not used
+      
+      # Step 2 - Generate new migration script using difference artifact
+        - task: PowerShell@2
+          displayName: 'Flyway CLI - Generate Migration Script'
+          inputs:
+            targetType: 'inline'
+            script: |
+              flyway generate `
+              "-generate.description=$(FLYWAY_VERSION_DESCRIPTION)" `
+              "-generate.location=$(WORKING_DIRECTORY)\migrations" `
+              "-generate.types=versioned,undo" `
+              "-generate.artifactFilename=$(System.ArtifactsDirectory)\Artifacts\Flyway.$(DATABASE_NAME).differences-$(get-date -f yyyyMMdd).zip" `
+              "-generate.addTimestamp=true" `
+              -outputType="" `
+              -licenseKey="$(FLYWAY_LICENSE_KEY)" `
+              -configFiles="$(WORKING_DIRECTORY)\flyway.toml" `
+              -schemaModelLocation="$(WORKING_DIRECTORY)\schema-model\"
+            pwsh: false
+          continueOnError: false
+          condition: eq(variables['executeBuild'], true)
+
+        # Step 3 - Migrate all scripts from the migration folder, to verify they can be deployed against an empty database. This is the quickest way to get feedback about problematic scripts
+        - task: PowerShell@2
+          displayName: 'Flyway CLI - Validate New Migration Script'
+          inputs:
+            targetType: 'inline'
+            script: |
+              flyway info migrate info `
+              "-environment=$(TARGET_ENVIRONMENT)" `
+              "-user=$(TARGET_DATABASE_USER)" `
+              "-password=$(TARGET_DATABASE_PASSWORD)" `
+              "-errorOverrides=S0001:0:I-" `
+              "-licenseKey=$(FLYWAY_LICENSE_KEY)" `
+              -configFiles="$(WORKING_DIRECTORY)\flyway.toml" `
+              -locations="filesystem:$(WORKING_DIRECTORY)\migrations" `
+              "-flywayServicePublish.publishReport=$(FLYWAY_PUBLISH_RESULT)" `
+              "-reportEnabled=$(FLYWAY_PUBLISH_RESULT)" `
+              "-email=$(FLYWAY_PIPELINES_EMAIL)" `
+              "-token=$(FLYWAY_PIPELINES_TOKEN)"
+            pwsh: false
+          continueOnError: false
+          condition: eq(variables['executeBuild'], true)
+          # env:
+
+        # Step 4 - Copy build files to artifact directory #
+        - task: CopyFiles@2
+          inputs:
+            SourceFolder: '$(WORKING_DIRECTORY)'
+            Contents: |
+              !flyway-*/**/*
+              !.git/**/*
+              !.git*/**/*
+              **/schema-model/**/*
+              **/migrations/**/*
+              **/backups/**/*
+              **/flyway.toml
+              **/Filter.scpf
+            TargetFolder: '$(System.ArtifactsDirectory)'
+        # Step 5 - Publish Build Artifact #
+        - task: PublishBuildArtifacts@1 # This step publishes all the validated Flyway Project files as a build artifact
+          displayName: 'Publish Build Artifact'
+          inputs:
+            ArtifactName: 'Flyway-CI-$(Build.BuildId)'
+            PathtoPublish: '$(System.ArtifactsDirectory)'
+        # Step 6 - Publish Migration Scripts to Branch
+        - task: PowerShell@2
+          displayName: 'GIT Manual - Commit Flyway Dev Output to Active Branch'
+          inputs:
+            targetType: 'inline'
+            script: |
+              Set-Location "$(WORKING_DIRECTORY)"
+
+                # Configure Git
+                Write-Host "Updating Git Config to use Azure DevOps Build Agent details..."
+                git config user.email "hosted.agent@dev.azure.com"
+                git config user.name "Azure Pipeline"
+                git config --global --add safe.directory '*'
+
+                # Check if source branch is available
+                $branchSourcePath = ${env:BUILD_SOURCEBRANCH} -replace "refs/heads/",""
+                if (-not $branchSourcePath) {
+                    Write-Error "Source branch not found. Ensure the branch is correctly set in Build_SourceBranch."
+                    exit 1
+                }
+
+                Write-Host "Source branch: $branchSourcePath"
+
+                # Checkout the source branch and check its status
+                Write-Host "Checking out branch: $branchSourcePath"
+                git fetch -origin
+                git branch --set-upstream-to=origin/$branchSourcePath $branchSourcePath
+                git pull --rebase origin $branchSourcePath
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Host "Git - Failed to Pull and Rebase from $branchSourcePath"
+                    Write-Host "Git - Attempting to abort rebase"
+                    git rebase --abort
+                    Write-Host "Git - Retrying Rebase"
+                    git pull --rebase origin $branchSourcePath
+                }
+                git checkout $branchSourcePath
+                if ($?) {
+                    git status
+                } else {
+                    Write-Error "Failed to checkout branch: $branchSourcePath"
+                    exit 1
+                }
+
+                # Create a temporary branch for the new changes
+                $tempBranchName = "Build/FlywayDev-${env:BUILD_BUILDNUMBER}-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+                Write-Host "Creating temporary branch: $tempBranchName"
+                git switch -c $tempBranchName
+                if (-not $?) {
+                    Write-Error "Failed to create a temporary branch."
+                    exit 1
+                }
+
+                # Stage and commit changes
+                Write-Host "Staging and committing all changes..."
+                git add --all
+                git commit -m "Flyway Dev - Auto Generated Migration Scripts. Solution source updated by ${env:BUILD_BUILDNUMBER} [skip ci] [skip pipeline]"
+                if (-not $?) {
+                    Write-Host "Git - No Changes Found. Exiting Gracefully"
+                    exit 0
+                }
+
+                # Fetch and merge changes back into the source branch
+                Write-Host "Fetching updates and merging changes into $branchSourcePath..."
+                git fetch --all
+                git checkout $branchSourcePath
+                git merge $tempBranchName -m "Merge from $tempBranchName into $branchSourcePath"
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Error "Merge failed. Resolve conflicts manually."
+                    exit 1
+                }
+
+                # Push changes back to the repository
+                Write-Host "Pushing changes to $branchSourcePath..."
+                git pull --rebase origin $branchSourcePath
+                git push origin $branchSourcePath
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Error "Push failed. Ensure repository permissions are correct."
+                    exit 1
+                }
+
+                Write-Host "Changes pushed successfully to $branchSourcePath"
+            pwsh: false
+          continueOnError: false
+          condition: and(ne(variables['System.PullRequest.TargetBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))
+        
+        
+        - task: PowerShell@2
+          displayName: 'GIT PR - Commit Flyway Dev Output to Active Branch'
+          inputs:
+            targetType: 'inline'
+            script: |
+              Set-Location "$(WORKING_DIRECTORY)"
+
+                # Fetch source and target branches from the pull request variables
+                $branchSource = "${env:SYSTEM_PULLREQUEST_SOURCEBRANCH}"
+                $branchSourcePath = $branchSource -replace "refs/heads/", ""
+
+                $branchTarget = "${env:SYSTEM_PULLREQUEST_TARGETBRANCH}"
+                $branchTargetPath = $branchTarget -replace "refs/heads/", ""
+
+                # Ensure both source and target branches are available
+                if (-not $branchSourcePath) {
+                    Write-Error "Source branch not found. Ensure System.PullRequest.SourceBranch is set."
+                    exit 1
+                }
+
+                if (-not $branchTargetPath) {
+                    Write-Error "Target branch not found. Ensure System.PullRequest.TargetBranch is set."
+                    exit 1
+                }
+
+                Write-Host "Source branch: $branchSourcePath"
+                Write-Host "Target branch: $branchTargetPath"
+
+                # Add Git config items
+                Write-Host "Adding Git configuration for the Azure DevOps Build Agent..."
+                git config user.email "hosted.agent@dev.azure.com"
+                git config user.name "Azure Pipeline"
+                git config --global --add safe.directory '*'
+
+                # Step 1: Fetch and pull the latest information from the remote repository
+                Write-Host "Fetching and pulling latest changes from the remote repository..."
+                git fetch origin 
+                git branch --set-upstream-to=origin/$branchSourcePath $branchSourcePath
+                git pull --rebase origin $branchSourcePath
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Host "Git - Failed to Pull and Rebase from $branchSourcePath"
+                    Write-Host "Git - Attempting to abort rebase"
+                    git rebase --abort
+                    Write-Host "Git - Retrying Rebase"
+                    git pull --rebase origin $branchSourcePath
+                }
+
+                # Step 2: Stash any uncommitted changes
+                Write-Host "Stashing new .sql changes in the working repository..."
+                git add *.sql 
+                git stash 
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Error "Failed to stash changes. Exiting."
+                    # Step 6a: Clean up pending commits if the push fails
+                    git reset --hard HEAD~1
+                    exit 1
+                }
+
+                # Step 3: Checkout source branch and merge the target branch into it
+                Write-Host "Checking out the source branch: $branchSourcePath"
+                git checkout $branchSourcePath
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Error "Failed to checkout source branch: $branchSourcePath. Exiting."
+                    # Step 6a: Clean up pending commits if the push fails
+                    git reset --hard HEAD~1
+                    exit 1
+                }
+
+                # Step 4: Reapply stashed changes
+                Write-Host "Reapplying stashed changes..."
+                git stash pop
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Host "No Stashed Changes Found. Exiting Gracefully."
+                    # Step 6a: Clean up pending commits if the push fails
+                    git reset --hard HEAD~1
+                    exit 0
+                }
+
+                git status
+
+                # Step 5: Stage and commit the changes
+                Write-Host "Committing changes..."
+                git add *.sql 
+                git commit -m "Flyway Dev - Auto Generated Migration Scripts. Solution source updated by ${env:BUILD_BUILDNUMBER} [skip ci] [skip pipeline]"
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Error "Failed to commit changes. Exiting."
+                    # Step 6a: Clean up pending commits if the push fails
+                    git reset --hard HEAD~1
+                    exit 1
+                }
+
+                git status
+
+                # Step 6: Push the changes to the repository
+                Write-Host "Pushing changes to $branchSourcePath..."
+                git pull --rebase origin $branchSourcePath
+                git push origin $branchSourcePath
+                if ($LASTEXITCODE -ne 0) {
+                    # Step 6a: If push fails (e.g., permission issues), clean up the pending commits
+                    Write-Host "Push failed. Cleaning up local changes..."
+                    
+                    # Reset the branch to its previous state to remove the pending commit
+                    git reset --hard HEAD~1
+                    
+                    Write-Host "Git Branch Reset"
+                    exit 1
+                }
+
+                Write-Host "Changes successfully pushed to $branch."
+
+
+            pwsh: false
+          continueOnError: false
+          condition: eq(variables['Build.Reason'], 'PullRequest')

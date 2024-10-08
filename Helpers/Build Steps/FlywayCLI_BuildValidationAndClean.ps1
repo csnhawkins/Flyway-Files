@@ -11,6 +11,12 @@ $TARGET_DATABASE_PASSWORD = ($null -ne ${env:TARGET_DATABASE_PASSWORD}) ? ${env:
 $FLYWAY_LICENSE_KEY = ($null -ne ${env:FLYWAY_LICENSE_KEY}) ? ${env:FLYWAY_LICENSE_KEY} : ""
 $FLYWAY_PROJECT_LOCATION = ($null -ne ${env:WORKING_DIRECTORY}) ? ${env:WORKING_DIRECTORY} : "C:\Redgate\GIT\Repos\AzureDevOps\Westwind"
 
+# Optional - Flyway Pipeline #
+$FLYWAY_PUBLISH_RESULT = ($null -ne ${env:FLYWAY_PUBLISH_RESULT}) ? ${env:FLYWAY_PUBLISH_RESULT} : "false"
+$FLYWAY_PIPELINES_EMAIL = ($null -ne ${env:FLYWAY_PIPELINES_EMAIL}) ? ${env:FLYWAY_PIPELINES_EMAIL} : "NOTSET"
+$FLYWAY_PIPELINES_TOKEN = ($null -ne ${env:FLYWAY_PIPELINES_TOKEN}) ? ${env:FLYWAY_PIPELINES_TOKEN} : "NOTSET"
+
+
 # Validate Scripts Against Target Environment #
 if (${flywayClean} -eq "true") {
   try {
@@ -52,7 +58,11 @@ if (${flywayMigrate} -eq "true") {
     "-errorOverrides=S0001:0:I-" `
     "-licenseKey=$FLYWAY_LICENSE_KEY" `
     "-configFiles=$FLYWAY_PROJECT_LOCATION\flyway.toml" `
-    "-locations=filesystem:$FLYWAY_PROJECT_LOCATION\migrations"
+    "-locations=filesystem:$FLYWAY_PROJECT_LOCATION\migrations" `
+    "-flywayServicePublish.publishReport=$FLYWAY_PUBLISH_RESULT" `
+    "-reportEnabled=$FLYWAY_PUBLISH_RESULT" `
+    "-email=$FLYWAY_PIPELINES_EMAIL" `
+    "-token=$FLYWAY_PIPELINES_TOKEN"
   }
 else {
   Write-Host "Flyway CLI - Skipping Migrate Stage Due to FLYWAY_MIGRATE variable set to false"
