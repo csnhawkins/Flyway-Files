@@ -9,7 +9,7 @@ trigger:
       - migrations/*
 
 pool:
-  name: "default" # To be set when a self-hosted agent pool is to be used alongside this pipeline
+  name: "Default" # To be set when a self-hosted agent pool is to be used alongside this pipeline
   #vmImage: "" # To be used when a microsoft-hosted agent is used alongside this pipeline (Such as ubuntu-latest/windows-latest)
 
 variables:
@@ -126,6 +126,56 @@ stages:
               Write-Host "##vso[task.setvariable variable=skipCI]false"
               }
             workingDirectory: '$(WORKING_DIRECTORY)'
+
+        # Pre-Req - Get Pull Request Name To Use for Migration Script Description #
+        - task: PowerShell@2
+          displayName: 'ADO - Get Pull Request Name'
+          condition: and(succeeded(), not(eq(variables['skipCI'], 'true')))
+          inputs:
+            targetType: 'inline'
+            script: |
+              try {
+                # Call the Azure DevOps Services REST API to get the PR details
+                $url = "$($env:SYSTEM_TEAMFOUNDATIONCOLLECTIONURI)$env:SYSTEM_TEAMPROJECTID/_apis/git/repositories/$(Build.Repository.ID)/pullRequests/$(System.PullRequest.PullRequestId)?api-version=7.0"
+                $headers = @{
+                  Authorization = "Bearer $(System.AccessToken)"
+                }
+
+                # Make the REST API call to retrieve PR information
+                $pullRequestInfo = Invoke-RestMethod -Uri $url -Method 'GET' -ContentType 'application/json' -Headers $headers
+
+                # Parse the PR title from the JSON response
+                $json = $($pullRequestInfo | ConvertTo-Json -Depth 100 | ConvertFrom-Json)
+                $title = $json.title
+                
+                # If the title is empty, throw an error
+                if (-not $title) {
+                  throw "PR title is empty"
+                }
+
+                # Sanitize the PR title by removing special characters
+                $sanitizedTitle = $title -replace '[^a-zA-Z0-9]', ''
+
+                # If the sanitized title is empty after cleaning, throw an error
+                if (-not $sanitizedTitle) {
+                  throw "Sanitized title is empty after cleaning special characters"
+                }
+
+                Write-Host "Sanitized PR Title: $sanitizedTitle"
+
+                # Set the sanitized title as a pipeline variable
+                Write-Host "##vso[task.setvariable variable=FLYWAY_VERSION_DESCRIPTION_SANITIZED]$sanitizedTitle"
+              }
+              catch {
+                # If anything fails, set the variable to the default value
+                Write-Host "Error occurred: $($_.Exception.Message)"
+                Write-Host "Setting default value for PR title."
+
+                # Set the default value
+                $defaultTitle = "FlywayCLIAutomatedScript"
+                Write-Host "##vso[task.setvariable variable=FLYWAY_VERSION_DESCRIPTION_SANITIZED]$defaultTitle"
+              }  
+        
         # Step 1- Create Diff Artifact from Schema Model Directory #
         - task: PowerShell@2
           displayName: 'Flyway CLI - Create Diff Artifact'
@@ -158,7 +208,7 @@ stages:
             targetType: 'inline'
             script: |
               flyway generate `
-              "-generate.description=$(FLYWAY_VERSION_DESCRIPTION)" `
+              "-generate.description=$(FLYWAY_VERSION_DESCRIPTION_SANITIZED)" `
               "-generate.location=$(WORKING_DIRECTORY)\migrations" `
               "-generate.types=versioned,undo" `
               "-generate.artifactFilename=$(System.ArtifactsDirectory)\Artifacts\Flyway.$(DATABASE_NAME).differences-$(get-date -f yyyyMMdd).zip" `
