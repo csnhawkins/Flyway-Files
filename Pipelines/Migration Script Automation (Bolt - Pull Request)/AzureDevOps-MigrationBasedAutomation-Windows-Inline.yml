@@ -234,11 +234,11 @@ stages:
               "-errorOverrides=S0001:0:I-" `
               "-licenseKey=$(FLYWAY_LICENSE_KEY)" `
               -configFiles="$(WORKING_DIRECTORY)\flyway.toml" `
-              -locations="filesystem:$(WORKING_DIRECTORY)\migrations" `
-              "-flywayServicePublish.publishReport=$(FLYWAY_PUBLISH_RESULT)" `
-              "-reportEnabled=$(FLYWAY_PUBLISH_RESULT)" `
-              "-email=$(FLYWAY_PIPELINES_EMAIL)" `
-              "-token=$(FLYWAY_PIPELINES_TOKEN)"
+              -locations="filesystem:$(WORKING_DIRECTORY)\migrations"
+              # "-flywayServicePublish.publishReport=$(FLYWAY_PUBLISH_RESULT)" `
+              # "-reportEnabled=$(FLYWAY_PUBLISH_RESULT)" `
+              # "-email=$(FLYWAY_PIPELINES_EMAIL)" `
+              #"-token=$(FLYWAY_PIPELINES_TOKEN)"
             pwsh: false
           continueOnError: false
           condition: and(succeeded(), eq(variables['executeBuild'], 'true'), not(eq(variables['skipCI'], 'true')))
