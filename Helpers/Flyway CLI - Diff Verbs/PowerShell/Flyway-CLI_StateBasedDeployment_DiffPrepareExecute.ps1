@@ -9,9 +9,9 @@ $TARGET_DATABASE_JDBC = "jdbc:sqlserver://localhost;instanceName=SQLEXPRESS;data
 $TARGET_DATABASE_USER = ""
 $TARGET_DATABASE_PASSWORD = ""
 
-$FLYWAY_SCRIPT_DESCRIPTION = "FlywayCLIAutomatedScript"
 $FLYWAY_LICENSE_KEY = ""
 $WORKING_DIRECTORY = "C:\Redgate\GIT\Repos\AzureDevOps\Westwind"
+$ARTIFACT_DIRECTORY = "$WORKING_DIRECTORY\Artifacts"
 
 # Step 1 - Create Diff Artifact
 
@@ -42,18 +42,20 @@ if ($flywayDiffs -like "*No differences found*") {
 
 flyway prepare `
 "-prepare.changes=" `
-"-prepare.artifactFilename=C:\Redgate\GIT\Repos\AzureDevOps\Westwind\Artifacts\Flyway.$DATABASE_NAME.differences-$(get-date -f yyyyMMdd).zip" `
-"-deployScript=C:\Redgate\GIT\Repos\AzureDevOps\Westwind\Artifacts\Flyway-$DATABASE_NAME-AutoDeploymentScript-$(get-date -f yyyyMMdd).sql"
+"-prepare.artifactFilename=$ARTIFACT_DIRECTORY\Flyway.$DATABASE_NAME.differences-$(get-date -f yyyyMMdd).zip" `
+"-deployScript=$ARTIFACT_DIRECTORY\Flyway-$DATABASE_NAME-AutoDeploymentScript-$(get-date -f yyyyMMdd).sql"
 
-flyway generate `
-"-generate.description=$FLYWAY_SCRIPT_DESCRIPTION" `
-"-generate.location=$WORKING_DIRECTORY/Artifacts/" `
-"-generate.types=versioned,undo" `
-"-generate.artifactFilename=$WORKING_DIRECTORY\Artifacts\Flyway.$DATABASE_NAME.differences-$(get-date -f yyyyMMdd).zip" `
-"-outputType=" `
-"-generate.force=true" `
-"-licenseKey=$flywayLicenseKey" `
-"-configFiles=$flywayProjectSettings"
+# Prepare - Can create deployment script without first needing Diff.
+# flyway prepare `
+# "-prepare.source=$SOURCE_ENVIRONMENT" `
+# "-environments.$SOURCE_ENVIRONMENT.url=$SOURCE_DATABASE_JDBC" `
+# "-environments.$SOURCE_ENVIRONMENT.user=$SOURCE_DATABASE_USER" `
+# "-environments.$SOURCE_ENVIRONMENT.password=$SOURCE_DATABASE_PASSWORD" `
+# "-prepare.target=$TARGET_ENVIRONMENT" `
+# "-environments.$TARGET_ENVIRONMENT.url=$TARGET_DATABASE_JDBC" `
+# "-environments.$TARGET_ENVIRONMENT.user=$TARGET_DATABASE_USER" `
+# "-environments.$TARGET_ENVIRONMENT.password=$TARGET_DATABASE_PASSWORD" `
+# "-deployScript=C:\Redgate\GIT\Repos\AzureDevOps\Westwind\Artifacts\Flyway-$DATABASE_NAME-AutoDeploymentScript-$(get-date -f yyyyMMdd).sql"
 
 # Step 3 - Deploy to target
 
@@ -63,11 +65,3 @@ flyway deploy `
 "-environments.$TARGET_ENVIRONMENT.user=$TARGET_DATABASE_USER" `
 "-environments.$TARGET_ENVIRONMENT.password=$TARGET_DATABASE_PASSWORD" `
 "-deployScript=C:\Redgate\GIT\Repos\AzureDevOps\Westwind\Artifacts\Flyway-$DATABASE_NAME-AutoDeploymentScript-$(get-date -f yyyyMMdd).sql"
-
-
-flyway deploy `
-"-environment=$TARGET_ENVIRONMENT" `
-"-environments.$TARGET_ENVIRONMENT.url=$TARGET_DATABASE_JDBC" `
-"-environments.$TARGET_ENVIRONMENT.user=$TARGET_DATABASE_USER" `
-"-environments.$TARGET_ENVIRONMENT.password=$TARGET_DATABASE_PASSWORD" `
-"-deployScript=C:\Redgate\GIT\Repos\AzureDevOps\Westwind\Artifacts\V001__FlywayCLIAutomatedScript.sql"
