@@ -9,6 +9,7 @@ $TARGET_DATABASE_JDBC = "jdbc:sqlserver://localhost;instanceName=SQLEXPRESS;data
 $TARGET_DATABASE_USER = ""
 $TARGET_DATABASE_PASSWORD = ""
 
+$FLYWAY_SCRIPT_DESCRIPTION = "FlywayCLIAutomatedScript"
 $FLYWAY_LICENSE_KEY = ""
 $WORKING_DIRECTORY = "C:\Redgate\GIT\Repos\AzureDevOps\Westwind"
 
@@ -23,11 +24,19 @@ flyway diff `
 "-environments.$TARGET_ENVIRONMENT.url=$TARGET_DATABASE_JDBC" `
 "-environments.$TARGET_ENVIRONMENT.user=$TARGET_DATABASE_USER" `
 "-environments.$TARGET_ENVIRONMENT.password=$TARGET_DATABASE_PASSWORD" `
-"-diff.artifactFilename=C:\Redgate\GIT\Repos\AzureDevOps\Westwind\Artifacts\Flyway.$DATABASE_NAME.differences-$(get-date -f yyyyMMdd).zip" `
+"-diff.artifactFilename=$ARTIFACT_DIRECTORY\Flyway.$DATABASE_NAME.differences-$(get-date -f yyyyMMdd).zip" `
 -outputType="" `
 -licenseKey="$FLYWAY_LICENSE_KEY" `
 -configFiles="$WORKING_DIRECTORY\flyway.toml" `
--schemaModelLocation="$WORKING_DIRECTORY\schema-model\"
+-schemaModelLocation="$WORKING_DIRECTORY\schema-model\" `
+| Tee-Object -Variable flywayDiffs  # Capture Flyway Diff output to variable flywayDiffs and show output in console
+
+if ($flywayDiffs -like "*No differences found*") {
+  Write-Host "No changes to generate. Exiting script gracefully."
+  exit 0  # Graceful exit
+} else {
+  Write-Host "Changes detected. Proceeding with further steps."
+}
 
 # Step 2 - Prepare Deployment Script
 
@@ -37,15 +46,14 @@ flyway prepare `
 "-deployScript=C:\Redgate\GIT\Repos\AzureDevOps\Westwind\Artifacts\Flyway-$DATABASE_NAME-AutoDeploymentScript-$(get-date -f yyyyMMdd).sql"
 
 flyway generate `
-"-generate.description=$flywayVersionDescription" `
-"-generate.location=$flywayProjectPath/Artifacts/" `
+"-generate.description=$FLYWAY_SCRIPT_DESCRIPTION" `
+"-generate.location=$WORKING_DIRECTORY/Artifacts/" `
 "-generate.types=versioned,undo" `
-"-generate.artifactFilename=$diffArtifactFilePath" `
+"-generate.artifactFilename=$WORKING_DIRECTORY\Artifacts\Flyway.$DATABASE_NAME.differences-$(get-date -f yyyyMMdd).zip" `
 "-outputType=" `
 "-generate.force=true" `
 "-licenseKey=$flywayLicenseKey" `
-"-configFiles=$flywayProjectSettings" `
-"-schemaModelLocation=$flywayProjectSchemaModel"
+"-configFiles=$flywayProjectSettings"
 
 # Step 3 - Deploy to target
 
@@ -55,3 +63,11 @@ flyway deploy `
 "-environments.$TARGET_ENVIRONMENT.user=$TARGET_DATABASE_USER" `
 "-environments.$TARGET_ENVIRONMENT.password=$TARGET_DATABASE_PASSWORD" `
 "-deployScript=C:\Redgate\GIT\Repos\AzureDevOps\Westwind\Artifacts\Flyway-$DATABASE_NAME-AutoDeploymentScript-$(get-date -f yyyyMMdd).sql"
+
+
+flyway deploy `
+"-environment=$TARGET_ENVIRONMENT" `
+"-environments.$TARGET_ENVIRONMENT.url=$TARGET_DATABASE_JDBC" `
+"-environments.$TARGET_ENVIRONMENT.user=$TARGET_DATABASE_USER" `
+"-environments.$TARGET_ENVIRONMENT.password=$TARGET_DATABASE_PASSWORD" `
+"-deployScript=C:\Redgate\GIT\Repos\AzureDevOps\Westwind\Artifacts\V001__FlywayCLIAutomatedScript.sql"
