@@ -1,6 +1,6 @@
 # Variables #
 $DATABASE_NAME = "Westwind"
-$SOURCE_ENVIRONMENT = "development"
+$SOURCE_ENVIRONMENT = "schema-model"
 $SOURCE_DATABASE_JDBC = "jdbc:sqlserver://localhost;instanceName=SQLEXPRESS;databaseName=Westwind_Dev;encrypt=true;integratedSecurity=true;trustServerCertificate=true"
 $SOURCE_DATABASE_USER = ""
 $SOURCE_DATABASE_PASSWORD = ""
@@ -10,7 +10,9 @@ $TARGET_DATABASE_USER = ""
 $TARGET_DATABASE_PASSWORD = ""
 
 $FLYWAY_SCRIPT_DESCRIPTION = "FlywayCLIAutomatedScript"
-$FLYWAY_LICENSE_KEY = ""
+$FLYWAY_LICENSE_KEY = "" # Deprecated Auth Method. Use PATs instead
+$FLYWAY_EMAIL = ""
+$FLYWAY_TOKEN = ""
 $WORKING_DIRECTORY = "C:\Redgate\GIT\Repos\AzureDevOps\Westwind"
 $ARTIFACT_DIRECTORY = "$WORKING_DIRECTORY\Artifacts"
 
@@ -27,9 +29,10 @@ flyway diff `
 "-environments.$TARGET_ENVIRONMENT.password=$TARGET_DATABASE_PASSWORD" `
 "-diff.artifactFilename=$ARTIFACT_DIRECTORY\Flyway.$DATABASE_NAME.differences-$(get-date -f yyyyMMdd).zip" `
 -outputType="" `
--licenseKey="$FLYWAY_LICENSE_KEY" `
 -configFiles="$WORKING_DIRECTORY\flyway.toml" `
 -schemaModelLocation="$WORKING_DIRECTORY\schema-model\" `
+-email="$FLYWAY_EMAIL" `
+-token="$FLYWAY_TOKEN"
 | Tee-Object -Variable flywayDiffs  # Capture Flyway Diff output to variable flywayDiffs and show output in console
 
 if ($flywayDiffs -like "*No differences found*") {
