@@ -25,8 +25,8 @@ variables:
   FLYWAY_PROJECT_NAME: AutoPilot
   FLYWAY_LICENSE_KEY: "" # Set this as a secure variable
 
-  # Optional - For Microsoft Hosted Agents, it's necessary to ensure Flyway is installed on each run. Therefore, the below variables are required
-  FLYWAY_CLI_INSTALL_CHECK: "true" # Setting to false will skip the Flyway CLI check step
+  # Optional - For ephemeral agents/runners, it's necessary to validate Flyway is installed on each run. Set the below to true to enable the functionality
+  FLYWAY_CLI_INSTALL_CHECK: "false" # Setting to false will skip the Flyway CLI check step
   FLYWAY_VERSION: "10.18.2" # This outlines the version of Flyway CLI that will be downloaded if no Flyway CLI is detected on the target agent
   REDGATE_FLYWAY_DIFF_VERB: "true" # Enables Alpha Diff Verbs within Flyway CLI
 
@@ -54,10 +54,14 @@ stages:
         # Pre-Req - Check if Flyway CLI Installed and Available on Agent
         - script: |
             if flyway --help ; then
-              ech "Flyway Installed and Available"
+              echo "Flyway Installed and Available"
             else 
               echo "Flyway Not Installed - Downloading and Configuring Now"
               wget -qO- https://download.red-gate.com/maven/release/com/redgate/flyway/flyway-commandline/$(FLYWAY_VERSION)/flyway-commandline-$(FLYWAY_VERSION)-linux-x64.tar.gz | tar -xvz && sudo ln -s `pwd`/flyway-$(FLYWAY_VERSION)/flyway /usr/local/bin 
+              echo "Flyway Downloaded - Setting PATH"
+              export PATH="$(System.DefaultWorkingDirectory)/flyway-${FLYWAY_VERSION}:$PATH"
+              echo "Validation Step - Checking if Flyway can run"
+              flyway --version
             fi
           displayName: 'Flyway CLI - Install Check'
           condition: eq(variables['FLYWAY_CLI_INSTALL_CHECK'], true)
@@ -123,10 +127,14 @@ stages:
         # Pre-Req - Check if Flyway CLI Installed and Available on Agent
         - script: |
             if flyway --help ; then
-              ech "Flyway Installed and Available"
+              echo "Flyway Installed and Available"
             else 
               echo "Flyway Not Installed - Downloading and Configuring Now"
               wget -qO- https://download.red-gate.com/maven/release/com/redgate/flyway/flyway-commandline/$(FLYWAY_VERSION)/flyway-commandline-$(FLYWAY_VERSION)-linux-x64.tar.gz | tar -xvz && sudo ln -s `pwd`/flyway-$(FLYWAY_VERSION)/flyway /usr/local/bin 
+              echo "Flyway Downloaded - Setting PATH"
+              export PATH="$(System.DefaultWorkingDirectory)/flyway-${FLYWAY_VERSION}:$PATH"
+              echo "Validation Step - Checking if Flyway can run"
+              flyway --version
             fi
           displayName: 'Flyway CLI - Install Check'
           condition: eq(variables['FLYWAY_CLI_INSTALL_CHECK'], true)
@@ -174,10 +182,14 @@ stages:
           # Pre-Req - Check if Flyway CLI Installed and Available on Agent
         - script: |
             if flyway --help ; then
-              ech "Flyway Installed and Available"
+              echo "Flyway Installed and Available"
             else 
               echo "Flyway Not Installed - Downloading and Configuring Now"
               wget -qO- https://download.red-gate.com/maven/release/com/redgate/flyway/flyway-commandline/$(FLYWAY_VERSION)/flyway-commandline-$(FLYWAY_VERSION)-linux-x64.tar.gz | tar -xvz && sudo ln -s `pwd`/flyway-$(FLYWAY_VERSION)/flyway /usr/local/bin 
+              echo "Flyway Downloaded - Setting PATH"
+              export PATH="$(System.DefaultWorkingDirectory)/flyway-${FLYWAY_VERSION}:$PATH"
+              echo "Validation Step - Checking if Flyway can run"
+              flyway --version
             fi
           displayName: 'Flyway CLI - Install Check'
           condition: eq(variables['FLYWAY_CLI_INSTALL_CHECK'], true)
@@ -224,10 +236,14 @@ stages:
         # Pre-Req - Check if Flyway CLI Installed and Available on Agent
         - script: |
             if flyway --help ; then
-              ech "Flyway Installed and Available"
+              echo "Flyway Installed and Available"
             else 
               echo "Flyway Not Installed - Downloading and Configuring Now"
               wget -qO- https://download.red-gate.com/maven/release/com/redgate/flyway/flyway-commandline/$(FLYWAY_VERSION)/flyway-commandline-$(FLYWAY_VERSION)-linux-x64.tar.gz | tar -xvz && sudo ln -s `pwd`/flyway-$(FLYWAY_VERSION)/flyway /usr/local/bin 
+              echo "Flyway Downloaded - Setting PATH"
+              export PATH="$(System.DefaultWorkingDirectory)/flyway-${FLYWAY_VERSION}:$PATH"
+              echo "Validation Step - Checking if Flyway can run"
+              flyway --version
             fi
           displayName: 'Flyway CLI - Install Check'
           condition: eq(variables['FLYWAY_CLI_INSTALL_CHECK'], true)
@@ -275,10 +291,14 @@ stages:
           # Pre-Req - Check if Flyway CLI Installed and Available on Agent
         - script: |
             if flyway --help ; then
-              ech "Flyway Installed and Available"
+              echo "Flyway Installed and Available"
             else 
               echo "Flyway Not Installed - Downloading and Configuring Now"
               wget -qO- https://download.red-gate.com/maven/release/com/redgate/flyway/flyway-commandline/$(FLYWAY_VERSION)/flyway-commandline-$(FLYWAY_VERSION)-linux-x64.tar.gz | tar -xvz && sudo ln -s `pwd`/flyway-$(FLYWAY_VERSION)/flyway /usr/local/bin 
+              echo "Flyway Downloaded - Setting PATH"
+              export PATH="$(System.DefaultWorkingDirectory)/flyway-${FLYWAY_VERSION}:$PATH"
+              echo "Validation Step - Checking if Flyway can run"
+              flyway --version
             fi
           displayName: 'Flyway CLI - Install Check'
           condition: eq(variables['FLYWAY_CLI_INSTALL_CHECK'], true)
