@@ -1,7 +1,17 @@
 $ErrorActionPreference = "Stop"
 
-# Flyway Version to Use - Check here for latest version information
-$flywayVersion = '10.19.0'
+# Flyway Version to Use (Check for latest version: https://documentation.red-gate.com/fd/command-line-184127404.html)
+if ($null -ne ${env:FLYWAY_VERSION}) {
+  # Environment Variables - Use these if set as a variable - Target Database Connection Details
+  Write-Output "Using Environment Variables for Flyway CLI Version Number"
+  $flywayVersion = "${env:FLYWAY_VERSION}"
+  } else {
+  Write-Output "Using Local Variables for Flyway CLI Version Number"
+  # Local Variables - If Env Variables Not Set - Target Database Connection Details
+  $flywayVersion = '10.19.0'
+}
+
+Write-Host "Using Flyway CLI version $flywayVersion"
 
 # Flyway URL to download CLI
 $Url = "https://download.red-gate.com/maven/release/org/flywaydb/enterprise/flyway-commandline/$flywayVersion/flyway-commandline-$flywayVersion-windows-x64.zip"
@@ -65,18 +75,17 @@ if (Get-Command flyway -ErrorAction SilentlyContinue) {
 
     # Download the Flyway CLI
     Invoke-WebRequest -Uri $Url -OutFile $DownloadZipFile
+    Write-Host "Flyway CLI Successfully Downloaded"
 
     # Extract the CLI to the desired location
     Expand-Archive -Path $DownloadZipFile -DestinationPath $ExtractPath -Force
+    Write-Host "Flyway CLI Successfully Extracted to $ExtractPath"
 
     # Add Flyway to the PATH if not already added (one-time setup)
     if (-Not $Env:Path.Contains("C:\FlywayCLI")) {
         [System.Environment]::SetEnvironmentVariable('Path', "C:\FlywayCLI;$([System.Environment]::GetEnvironmentVariable('Path', [System.EnvironmentVariableTarget]::User))", [System.EnvironmentVariableTarget]::User)
-        Write-Host "Flyway added to PATH."
+        Write-Host "Flyway CLI added to Environment Variable PATH."
     }
-
-    # Verify the installation
-    Write-Host "Flyway $flywayVersion is now installed in $ExtractPath."
-    "flyway -v" | cmd.exe
+    Write-Host "Flyway CLI Download and Install Complete"
     Exit
 }
