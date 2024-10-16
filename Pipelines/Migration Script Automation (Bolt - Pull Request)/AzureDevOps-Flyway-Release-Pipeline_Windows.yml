@@ -1,4 +1,4 @@
-name: Flyway-AutoPilot-Simple-Pipeline-Windows
+name: Flyway-AutoPilot-Simple-Release-Pipeline-Windows
 
 trigger: 
   branches:
@@ -23,16 +23,17 @@ variables:
   # Optional: Side Task #2 -For added security, the below could be added to a variable group and marked as secure. Try this out in future once you get the pipeline running.
   group: "redgate_global_vars" # FLYWAY_EMAIL/FLYWAY_TOKEN
   #FLYWAY_LICENSE_KEY: "" # Deprecated Authentication Method. Use PATs instead and place securely in above library group
-  BASELINE_VERSION: "001"
+  BASELINE_VERSION: "001" # The version number of baseline script found in the migrations folder
 
-  # Optional - For Microsoft Hosted Agents, it's necessary to ensure Flyway is installed on each run. Therefore, the below variables are required
+  # Optional - For ephemeral agents/runners, it's necessary to validate Flyway is installed on each run. Set the below to true to enable the functionality
   FLYWAY_CLI_INSTALL_CHECK: "false" # Setting to false will skip the Flyway CLI check step
   FLYWAY_VERSION: "10.18.2" # This outlines the version of Flyway CLI that will be downloaded if no Flyway CLI is detected on the target agent
+  
+  # Optional - Flyway Feature Flags
   REDGATE_FLYWAY_DIFF_VERB: "true" # Enables Alpha Diff Verbs within Flyway CLI
 
   # Optional: Side Task #1 - Setup Flyway Pipeline Integration - https://flyway.red-gate.com/ For More Details
-  FLYWAY_PUBLISH_RESULT: "true" # Set this value to true to enable Flyway Pipelines and track your releases centrally!
-  # FLYWAY_LICENSE_KEY: "" # Set in Library Group 'redgate_global_vars', enable this variable if in plaintext
+  FLYWAY_PUBLISH_RESULT: "false" # Set this value to true to enable Flyway Pipelines and track your releases centrally!
   # FLYWAY_VERSION_DESCRIPTION "FlywayCLIAutomatedScript" # Set in Library Group 'redgate_global_vars', enable this variable if in plaintext
 
 stages:
@@ -43,16 +44,11 @@ stages:
       variables: # Tip - For sensitive variables, these can be made into a secret by clicking the Variables button in top right corner of the YAML pipeline editor.
         # Variables Expected - FLYWAY_LICENSE_KEY/FLYWAY_VERSION_DESCRIPTION
       - group: redgate_global_vars
-        # Variables Expected - BUILD_DATABASE_JDBC/BUILD_DATABASE_USER/BUILD_DATABASE_PASSWORD/TARGET_DATABASE_JDBC/TARGET_DATABASE_USER/TARGET_DATABASE_PASSWORD
-      - group: redgate_build_vars # 
-      - name: DATABASE_NAME
-        value: "MyDatabaseName" # Name of the target database. In this case an empty disposable database we can use for build testing.
-      - name: FLYWAY_PROJECT_PATH
-        value: "$(WORKING_DIRECTORY)"
-      - name: TARGET_ENVIRONMENT
-        value: "build" # This variable refers to the environment name present in the Flyway Projects TOML file. Use Flyway Desktop to check and change this value if required.
-      - name: executeBuild
-        value: true # Turn to false to skip the build stage tasks
+        # Variables Expected - DATABASE_NAME/TARGET_ENVIRONMENT/TARGET_DATABASE_USER/TARGET_DATABASE_PASSWORD
+      - group: redgate_build_vars # Library group name for stage specific variables
+      - name: EXAMPLE_VARIABLE # Example Variable if required
+        value: "MyValue"
+
 
       steps:
          # Pre-Req - Check if Flyway CLI Installed and Available on Agent
@@ -96,10 +92,12 @@ stages:
               "-reportEnabled=$(FLYWAY_PUBLISH_RESULT)"
             pwsh: false
           continueOnError: false
-          condition: eq(variables['executeBuild'], true)
+          condition: eq(variables['EXECUTE_BUILD'], true)
           env:
             FLYWAY_EMAIL: "$(FLYWAY_EMAIL)" # Task Variables can also be passed if Library Group method not used
             FLYWAY_TOKEN: "$(FLYWAY_TOKEN)" # Secure Variables, such as PATs, can be passed as environment variables for added security
+            FLYWAY_LICENSE_KEY: "$(FLYWAY_LICENSE_KEY)" # Deprecated Auth Method - However, license keys can still be passed for authentication where necessary
+
 
         - task: CopyFiles@2
           inputs:
@@ -125,20 +123,16 @@ stages:
     displayName: Test Stage
     dependsOn: Build
     variables: # Tip - For sensitive variables, these can be made into a secret by clicking the Variables button in top right corner of the YAML pipeline editor.
-      DATABASE_NAME: "MyDatabaseName" # Name of the target database. In this case an empty disposable database we can use for build testing.
-      TARGET_ENVIRONMENT: "test" # This variable refers to the environment name present in the Flyway Projects TOML file. Use Flyway Desktop to check and change this value if required.
-      TARGET_DATABASE_USERNAME: "Redgate" # Optional - If SQL Authentication is used, provide the relevant database username. Otherwise, leave blank
-      TARGET_DATABASE_PASSWORD: "MyPassword" # Optional - If SQL Authentication is used, provide the relevant database password. Otherwise, leave blank
-      REPORT_ENVIRONMENT: "check" # This variable refers to the environment name present in the Flyway Projects TOML file. Use Flyway Desktop to check and change this value if required.
-      REPORT_DATABASE_USERNAME: "Redgate" # Optional - If SQL Authentication is used, provide the relevant database username. Otherwise, leave blank
-      REPORT_DATABASE_PASSWORD: "MyPassword" # Optional - If SQL Authentication is used, provide the relevant database password. Otherwise, leave blank
-      pauseForCodeReview: false
-      generateReport: true                     #Turn on to enable the Check Report
-      #- group: ${{stage.variableGroupName}}
+      # Variables Expected - FLYWAY_EMAIL/FLYWAY_TOKEN/FLYWAY_LICENSE_KEY (Optional Auth Method)
+    - group: redgate_global_vars
+      # Variables Expected - REPORT_ENVIRONMENT/REPORT_DATABASE_USERNAME/REPORT_DATABASE_PASSWORD/TARGET_ENVIRONMENT/TARGET_DATABASE_JDBC/TARGET_DATABASE_USER/TARGET_DATABASE_PASSWORD/GENERATE_REPORT/pauseForCodeReview
+    - group: redgate_test_vars # Library group name for stage specific variables
+    - name: EXAMPLE_VARIABLE # Example Variable if required
+      value: "MyValue"
     jobs:
     - job: ChangeReport
       displayName: "Flyway - Pre Release Change Report"
-      condition: eq(variables['generateReport'], true)
+      condition: 
       variables:
         EXAMPLE: ""
       #- group: ${{stage.variableGroupName}}
@@ -163,29 +157,49 @@ stages:
                       exit 1
                     }
         - task: DownloadBuildArtifacts@0
+          condition: and(succeeded(), eq(variables['GENERATE_REPORT'], 'true'))
           inputs:
             buildType: 'current'
             downloadType: 'single'
             artifactName: 'Flyway-CI-$(Build.BuildId)'
             downloadPath: '$(System.ArtifactsDirectory)'
         
-        - script: |
-              flyway check -dryrun -changes -drift info -environment="$(TARGET_ENVIRONMENT)" -user="$(TARGET_DATABASE_USERNAME)" -password="$(TARGET_DATABASE_PASSWORD)" -check.buildEnvironment="$(REPORT_ENVIRONMENT)" -environments.$(REPORT_ENVIRONMENT).user="$(REPORT_DATABASE_USERNAME)" -environments.$(REPORT_ENVIRONMENT).password="$(REPORT_DATABASE_PASSWORD)" -licenseKey="$(FLYWAY_LICENSE_KEY)" -configFiles="$(System.ArtifactsDirectory)\Flyway-CI-$(Build.BuildId)\flyway.toml" -locations="filesystem:$(System.ArtifactsDirectory)\Flyway-CI-$(Build.BuildId)\migrations" "-reportEnabled=true" "-reportFilename=$(System.ArtifactsDirectory)\Flyway-CI-$(Build.BuildId)\reports\$(DATABASE_NAME)-Run-$(Build.BuildId)-Check-Report.html" -email="$(FLYWAY_EMAIL)" -token="$(FLYWAY_TOKEN)"
-          workingDirectory: '$(WORKING_DIRECTORY)'
+        - task: PowerShell@2
+          displayName: 'Flyway CLI - Check Report'
+          condition: and(succeeded(), eq(variables['GENERATE_REPORT'], 'true'))
           continueOnError: false
-          displayName: 'Flyway Check Report'
+          inputs:
+            targetType: 'inline'
+            workingDirectory: '$(WORKING_DIRECTORY)'
+            script: |
+              flyway check -dryrun -changes -drift info `
+              -environment="$(TARGET_ENVIRONMENT)" `
+              -user="$(TARGET_DATABASE_USERNAME)" `
+              -password="$(TARGET_DATABASE_PASSWORD)" `
+              "-check.buildEnvironment=$(REPORT_ENVIRONMENT)" `
+              "-environments.$(REPORT_ENVIRONMENT).user=$(REPORT_DATABASE_USERNAME)" `
+              "-environments.$(REPORT_ENVIRONMENT).password=$(REPORT_DATABASE_PASSWORD)" `
+              -configFiles="$(System.ArtifactsDirectory)\Flyway-CI-$(Build.BuildId)\flyway.toml" `
+              -locations="filesystem:$(System.ArtifactsDirectory)\Flyway-CI-$(Build.BuildId)\migrations" `
+              "-reportEnabled=true" `
+              "-reportFilename=$(System.ArtifactsDirectory)\Flyway-CI-$(Build.BuildId)\reports\$(DATABASE_NAME)-Run-$(Build.BuildId)-Check-Report.html"
+          env:
+            FLYWAY_EMAIL: "$(FLYWAY_EMAIL)" # Task Variables can also be passed if Library Group method not used
+            FLYWAY_TOKEN: "$(FLYWAY_TOKEN)" # Secure Variables, such as PATs, can be passed as environment variables for added security
+            FLYWAY_LICENSE_KEY: "$(FLYWAY_LICENSE_KEY)" # Deprecated Auth Method - However, license keys can still be passed for authentication where necessary
         
         - task: PublishBuildArtifacts@1
           displayName: 'Publish Check Report'
-          condition: always()
+          condition: and(succeeded(), eq(variables['GENERATE_REPORT'], 'true'))
           inputs:
             ArtifactName: 'Flyway-CD-Reports-$(Build.BuildId)'
             PathtoPublish: '$(System.ArtifactsDirectory)\Flyway-CI-$(Build.BuildId)\reports\$(DATABASE_NAME)-Run-$(Build.BuildId)-Check-Report.html'
         
-        - task: JakubRumpca.azure-pipelines-html-report.PublishHtmlReport.PublishHtmlReport@1 #This is an optional task that can make viewing the Check report much easier in each run. Disable if required.
-          displayName: 'Publish HTML Report'
-          inputs:
-            reportDir: '$(System.ArtifactsDirectory)\Flyway-CI-$(Build.BuildId)\reports\$(DATABASE_NAME)-Run-$(Build.BuildId)-Check-Report.html'
+        # - task: JakubRumpca.azure-pipelines-html-report.PublishHtmlReport.PublishHtmlReport@1 #This is an optional task that can make viewing the Check report much easier in each run. Disable if required.
+        #   condition: and(succeeded(), eq(variables['GENERATE_REPORT'], 'true'))
+        #   displayName: 'Publish HTML Report'
+        #   inputs:
+        #     reportDir: '$(System.ArtifactsDirectory)\Flyway-CI-$(Build.BuildId)\reports\$(DATABASE_NAME)-Run-$(Build.BuildId)-Check-Report.html'
 
     - job: CodeReview
       displayName: Code Review
@@ -254,3 +268,155 @@ stages:
           env:
             FLYWAY_EMAIL: "$(FLYWAY_EMAIL)" # Task Variables can also be passed if Library Group method not used
             FLYWAY_TOKEN: "$(FLYWAY_TOKEN)" # Secure Variables, such as PATs, can be passed as environment variables for added security
+            FLYWAY_LICENSE_KEY: "$(FLYWAY_LICENSE_KEY)" # Deprecated Auth Method - However, license keys can still be passed for authentication where necessary
+
+  
+  - stage: Prod
+    displayName: Prod Stage
+    dependsOn: Test
+    variables: # Tip - For sensitive variables, these can be made into a secret by clicking the Variables button in top right corner of the YAML pipeline editor.
+      # Variables Expected - FLYWAY_EMAIL/FLYWAY_TOKEN/FLYWAY_LICENSE_KEY (Optional Auth Method)
+    - group: redgate_global_vars
+      # Variables Expected - REPORT_ENVIRONMENT/REPORT_DATABASE_USERNAME/REPORT_DATABASE_PASSWORD/TARGET_ENVIRONMENT/TARGET_DATABASE_JDBC/TARGET_DATABASE_USER/TARGET_DATABASE_PASSWORD/GENERATE_REPORT/pauseForCodeReview
+    - group: redgate_prod_vars # Library group name for stage specific variables
+    - name: EXAMPLE_VARIABLE # Example Variable if required
+      value: "MyValue"
+    jobs:
+    - job: ChangeReport
+      displayName: "Flyway - Pre Release Change Report"
+      condition:
+      variables:
+        EXAMPLE: ""
+      #- group: ${{stage.variableGroupName}}
+      #- group: pipeline_flyway_vars
+      steps:
+                 # Pre-Req - Check if Flyway CLI Installed and Available on Agent
+        - task: PowerShell@2
+          displayName: 'Flyway CLI - Install Check'
+          condition: eq(variables['FLYWAY_CLI_INSTALL_CHECK'], true)
+          inputs:
+            targetType: 'inline'
+            script: |
+               $scriptPath = "$(WORKING_DIRECTORY)/scripts/Flyway_DownloadAndInstallCLI.ps1"
+                    if (Test-Path $scriptPath) {
+                      Write-Host "Script found. Running Flyway_DownloadAndInstallCLI.ps1..."
+                      & $scriptPath
+                      Write-Host "Updating PATH environment variable to include Flyway CLI Path"
+                        Write-Host "##vso[task.prependpath]C:\FlywayCLI\flyway-$(FLYWAY_VERSION)"
+                    } 
+                    else {
+                      Write-Host "Error: Script not found at path $scriptPath"
+                      exit 1
+                    }
+        - task: DownloadBuildArtifacts@0
+          inputs:
+            buildType: 'current'
+            downloadType: 'single'
+            artifactName: 'Flyway-CI-$(Build.BuildId)'
+            downloadPath: '$(System.ArtifactsDirectory)'
+        
+        - task: PowerShell@2
+          displayName: 'Flyway CLI - Check Report'
+          condition: and(succeeded(), eq(variables['GENERATE_REPORT'], 'true'))
+          continueOnError: false
+          inputs:
+            targetType: 'inline'
+            workingDirectory: '$(WORKING_DIRECTORY)'
+            script: |
+              flyway check -dryrun -changes -drift info `
+              -environment="$(TARGET_ENVIRONMENT)" `
+              -user="$(TARGET_DATABASE_USERNAME)" `
+              -password="$(TARGET_DATABASE_PASSWORD)" `
+              "-check.buildEnvironment=$(REPORT_ENVIRONMENT)" `
+              "-environments.$(REPORT_ENVIRONMENT).user=$(REPORT_DATABASE_USERNAME)" `
+              "-environments.$(REPORT_ENVIRONMENT).password=$(REPORT_DATABASE_PASSWORD)" `
+              -configFiles="$(System.ArtifactsDirectory)\Flyway-CI-$(Build.BuildId)\flyway.toml" `
+              -locations="filesystem:$(System.ArtifactsDirectory)\Flyway-CI-$(Build.BuildId)\migrations" `
+              "-reportEnabled=true" `
+              "-reportFilename=$(System.ArtifactsDirectory)\Flyway-CI-$(Build.BuildId)\reports\$(DATABASE_NAME)-Run-$(Build.BuildId)-Check-Report.html"
+          env:
+            FLYWAY_EMAIL: "$(FLYWAY_EMAIL)" # Task Variables can also be passed if Library Group method not used
+            FLYWAY_TOKEN: "$(FLYWAY_TOKEN)" # Secure Variables, such as PATs, can be passed as environment variables for added security
+            FLYWAY_LICENSE_KEY: "$(FLYWAY_LICENSE_KEY)" # Deprecated Auth Method - However, license keys can still be passed for authentication where necessary
+        
+        - task: PublishBuildArtifacts@1
+          displayName: 'Publish Check Report'
+          condition: and(succeeded(), eq(variables['GENERATE_REPORT'], 'true'))
+          inputs:
+            ArtifactName: 'Flyway-CD-Reports-$(Build.BuildId)'
+            PathtoPublish: '$(System.ArtifactsDirectory)\Flyway-CI-$(Build.BuildId)\reports\$(DATABASE_NAME)-Run-$(Build.BuildId)-Check-Report.html'
+        
+        # - task: JakubRumpca.azure-pipelines-html-report.PublishHtmlReport.PublishHtmlReport@1 #This is an optional task that can make viewing the Check report much easier in each run. Disable if required.
+        #   condition: and(succeeded(), eq(variables['GENERATE_REPORT'], 'true'))
+        #   displayName: 'Publish HTML Report'
+        #   inputs:
+        #     reportDir: '$(System.ArtifactsDirectory)\Flyway-CI-$(Build.BuildId)\reports\$(DATABASE_NAME)-Run-$(Build.BuildId)-Check-Report.html'
+
+    - job: CodeReview
+      displayName: Code Review
+      dependsOn: ChangeReport
+      pool: server
+      steps:
+        - task: ManualValidation@0
+          condition: eq(variables['pauseForCodeReview'], true)
+          displayName: 'Review Change Report Prior To Release'
+          timeoutInMinutes: 4320 
+          inputs:
+            notifyUsers: |
+              user@email.com
+              example@example.com
+            instructions: 'Review changes'
+        
+    - job: Deploy
+      displayName: "Deploy"
+      dependsOn: CodeReview
+      variables:
+        EXAMPLE: ""
+      steps:
+                 # Pre-Req - Check if Flyway CLI Installed and Available on Agent
+        - task: PowerShell@2
+          displayName: 'Flyway CLI - Install Check'
+          condition: eq(variables['FLYWAY_CLI_INSTALL_CHECK'], true)
+          inputs:
+            targetType: 'inline'
+            script: |
+               $scriptPath = "$(WORKING_DIRECTORY)/scripts/Flyway_DownloadAndInstallCLI.ps1"
+                    if (Test-Path $scriptPath) {
+                      Write-Host "Script found. Running Flyway_DownloadAndInstallCLI.ps1..."
+                      & $scriptPath
+                      Write-Host "Updating PATH environment variable to include Flyway CLI Path"
+                        Write-Host "##vso[task.prependpath]C:\FlywayCLI\flyway-$(FLYWAY_VERSION)"
+                    } 
+                    else {
+                      Write-Host "Error: Script not found at path $scriptPath"
+                      exit 1
+                    }
+        - task: DownloadBuildArtifacts@0
+          inputs:
+            buildType: 'current'
+            downloadType: 'single'
+            artifactName: 'Flyway-CI-$(Build.BuildId)'
+            downloadPath: '$(System.ArtifactsDirectory)'
+        - task: PowerShell@2
+          displayName: 'Flyway CLI - Migrate'
+          condition: succeeded()
+          continueOnError: false
+          inputs:
+            targetType: 'inline'
+            workingDirectory:
+            script: |
+              flyway info migrate info `
+              -environment="$(TARGET_ENVIRONMENT)" `
+              -user="$(TARGET_DATABASE_USERNAME)" `
+              -password="$(TARGET_DATABASE_PASSWORD)" `
+              -errorOverrides=S0001:0:I- `
+              -baselineOnMigrate=true `
+              -baselineVersion="$(BASELINE_VERSION)" `
+              -configFiles="$(System.ArtifactsDirectory)\Flyway-CI-$(Build.BuildId)\flyway.toml" `
+              -locations="filesystem:$(System.ArtifactsDirectory)\Flyway-CI-$(Build.BuildId)\migrations" `
+              "-flywayServicePublish.publishReport=$(FLYWAY_PUBLISH_RESULT)" `
+              "-reportEnabled=$(FLYWAY_PUBLISH_RESULT)"
+          env:
+            FLYWAY_EMAIL: "$(FLYWAY_EMAIL)" # Task Variables can also be passed if Library Group method not used
+            FLYWAY_TOKEN: "$(FLYWAY_TOKEN)" # Secure Variables, such as PATs, can be passed as environment variables for added security
+            FLYWAY_LICENSE_KEY: "$(FLYWAY_LICENSE_KEY)" # Deprecated Auth Method - However, license keys can still be passed for authentication where necessary
