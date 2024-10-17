@@ -11,16 +11,27 @@ if ($null -ne ${env:FLYWAY_VERSION}) {
   $flywayVersion = '10.20.0'
 }
 
+# Flyway Download Location Check
+if ($null -ne ${env:FLYWAY_INSTALL_DIRECTORY}) {
+    # Environment Variables - Use these if set as a variable - Target Database Connection Details
+    Write-Output "Using Environment Variables for Flyway CLI Install Directory"
+    $flywayInstallDirectory = "${env:FLYWAY_INSTALL_DIRECTORY}"
+    } else {
+    Write-Output "Using Local Variables for Flyway CLI Install Directory"
+    # Local Variables - If Env Variables Not Set - Flyway Download Location
+    $flywayInstallDirectory = 'C:\FlywayCLI\'
+  }
+
 Write-Host "Using Flyway CLI version $flywayVersion"
 
 # Flyway URL to download CLI
 $Url = "https://download.red-gate.com/maven/release/org/flywaydb/enterprise/flyway-commandline/$flywayVersion/flyway-commandline-$flywayVersion-windows-x64.zip"
 
 # Path for downloaded zip file
-$DownloadZipFile = "C:\FlywayCLI\" + $(Split-Path -Path $Url -Leaf)
+$DownloadZipFile = "$flywayInstallDirectory" + $(Split-Path -Path $Url -Leaf)
 
 # Path where Flyway will be extracted (no version subfolder)
-$ExtractPath = "C:\FlywayCLI\"
+$ExtractPath = "$flywayInstallDirectory"
 
 # Ensure that the Flyway extraction directory exists
 if (-Not (Test-Path $ExtractPath)) {
@@ -79,7 +90,7 @@ if (Get-Command flyway -ErrorAction SilentlyContinue) {
             Remove-Item $ExtractPath/flyway-$flywayVersion/ -Force -Recurse
             Remove-Item $ExtractPath/*.zip -Force -Recurse
         }
-        
+
         Write-Host "Environtment Variables - Get Updated Values"
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","User") + ";" + [System.Environment]::GetEnvironmentVariable("Path","Machine")
 
