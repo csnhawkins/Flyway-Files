@@ -11,8 +11,8 @@ $TARGET_DATABASE_PASSWORD = ""
 
 # Flyway Authentication
 #$FLYWAY_LICENSE_KEY = "" # Deprecated License Key Method
-$FLYWAY_EMAIL = "Chris.Hawkins@red-gate.com"
-$FLYWAY_TOKEN = "zzw3XaSDtJJfIJOwwrL8cnE3l8vgOVBxjFwGxiV7dEvHNGHyqx6zt5TI02ImBHH7wsCy+sNaBZrb/Py+zRO18w=="
+$FLYWAY_EMAIL = ""
+$FLYWAY_TOKEN = ""
 
 $WORKING_DIRECTORY = "C:\Redgate\GIT\Repos\AzureDevOps\Westwind"
 $ARTIFACT_DIRECTORY = "$WORKING_DIRECTORY\Artifacts"
