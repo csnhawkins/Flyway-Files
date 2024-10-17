@@ -1,4 +1,4 @@
-name: Flyway-AutoPilot-Simple-Release-Pipeline-Windows
+name: Flyway-AutoPilot-Simple-Pipeline-Windows
 
 trigger: 
   branches:
@@ -9,7 +9,7 @@ trigger:
       - migrations/*
 
 pool:
-  name: "default" # To be set when a self-hosted agent pool is to be used alongside this pipeline
+  name: "Default" # To be set when a self-hosted agent pool is to be used alongside this pipeline
   #vmImage: "" # To be used when a microsoft-hosted agent is used alongside this pipeline (Such as ubuntu-latest/windows-latest)
 
 variables:
@@ -27,9 +27,8 @@ variables:
 
   # Optional - For ephemeral agents/runners, it's necessary to validate Flyway is installed on each run. Set the below to true to enable the functionality
   FLYWAY_CLI_INSTALL_CHECK: "false" # Setting to false will skip the Flyway CLI check step
-  FLYWAY_VERSION: "10.18.2" # This outlines the version of Flyway CLI that will be downloaded if no Flyway CLI is detected on the target agent
+  FLYWAY_VERSION: "10.20.0" # This outlines the version of Flyway CLI that will be downloaded if no Flyway CLI is detected on the target agent
   FLYWAY_INSTALL_DIRECTORY: "C:\\FlywayCLI\\" # The path on the agent machine where Flyway CLI will be installed
-
   
   # Optional - Flyway Feature Flags
   REDGATE_FLYWAY_DIFF_VERB: "true" # Enables Alpha Diff Verbs within Flyway CLI
@@ -60,7 +59,7 @@ stages:
           inputs:
             targetType: 'inline'
             script: |
-                    $scriptPath = "$(WORKING_DIRECTORY)/scripts/Flyway_DownloadAndInstallCLI.ps1"
+                    $scriptPath = "$(WORKING_DIRECTORY)\scripts\Flyway_DownloadAndInstallCLI.ps1"
                     if (Test-Path $scriptPath) {
                       Write-Host "Script found. Running Flyway_DownloadAndInstallCLI.ps1..."
                       & $scriptPath
@@ -147,7 +146,7 @@ stages:
           inputs:
             targetType: 'inline'
             script: |
-               $scriptPath = "$(WORKING_DIRECTORY)/scripts/Flyway_DownloadAndInstallCLI.ps1"
+               $scriptPath = "$(WORKING_DIRECTORY)\scripts\Flyway_DownloadAndInstallCLI.ps1"
                     if (Test-Path $scriptPath) {
                       Write-Host "Script found. Running Flyway_DownloadAndInstallCLI.ps1..."
                       & $scriptPath
@@ -231,7 +230,7 @@ stages:
           inputs:
             targetType: 'inline'
             script: |
-               $scriptPath = "$(WORKING_DIRECTORY)/scripts/Flyway_DownloadAndInstallCLI.ps1"
+               $scriptPath = "$(WORKING_DIRECTORY)\scripts\Flyway_DownloadAndInstallCLI.ps1"
                     if (Test-Path $scriptPath) {
                       Write-Host "Script found. Running Flyway_DownloadAndInstallCLI.ps1..."
                       & $scriptPath
@@ -299,7 +298,7 @@ stages:
           inputs:
             targetType: 'inline'
             script: |
-               $scriptPath = "$(WORKING_DIRECTORY)/scripts/Flyway_DownloadAndInstallCLI.ps1"
+               $scriptPath = "$(WORKING_DIRECTORY)\scripts\Flyway_DownloadAndInstallCLI.ps1"
                     if (Test-Path $scriptPath) {
                       Write-Host "Script found. Running Flyway_DownloadAndInstallCLI.ps1..."
                       & $scriptPath
@@ -382,7 +381,7 @@ stages:
           inputs:
             targetType: 'inline'
             script: |
-               $scriptPath = "$(WORKING_DIRECTORY)/scripts/Flyway_DownloadAndInstallCLI.ps1"
+               $scriptPath = "$(WORKING_DIRECTORY)\scripts\Flyway_DownloadAndInstallCLI.ps1"
                     if (Test-Path $scriptPath) {
                       Write-Host "Script found. Running Flyway_DownloadAndInstallCLI.ps1..."
                       & $scriptPath
