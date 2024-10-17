@@ -61,4 +61,4 @@ flyway deploy `
 "-environments.$TARGET_ENVIRONMENT.url=$TARGET_DATABASE_JDBC" `
 "-environments.$TARGET_ENVIRONMENT.user=$TARGET_DATABASE_USER" `
 "-environments.$TARGET_ENVIRONMENT.password=$TARGET_DATABASE_PASSWORD" `
-"-deployScript=$ARTIFACT_DIRECTORY\V001__FlywayCLIAutomatedScript.sql"
+"-deploy.scriptFilename=$ARTIFACT_DIRECTORY\V001__FlywayCLIAutomatedScript.sql"
