@@ -8,7 +8,7 @@ if ($null -ne ${env:FLYWAY_VERSION}) {
   } else {
   Write-Output "Using Local Variables for Flyway CLI Version Number"
   # Local Variables - If Env Variables Not Set - Target Database Connection Details
-  $flywayVersion = '10.19.0'
+  $flywayVersion = '10.20.0'
 }
 
 Write-Host "Using Flyway CLI version $flywayVersion"
@@ -36,7 +36,7 @@ $ProgressPreference = 'SilentlyContinue'
 
 # Check if Flyway is already installed
 if (Get-Command flyway -ErrorAction SilentlyContinue) {
-    Write-Host "Flyway Installed"
+    Write-Host "Flyway Already Installed"
 
     # Get the current Flyway version
     try {
@@ -65,9 +65,35 @@ if (Get-Command flyway -ErrorAction SilentlyContinue) {
         # Extract the CLI to the desired location
         Expand-Archive -Path $DownloadZipFile -DestinationPath $ExtractPath -Force
 
+        try {
+            Write-Host "Moving Flyway CLI to $ExtractPath Root"
+            Move-Item $ExtractPath/flyway-$flywayVersion/* $ExtractPath
+            Write-Host "Deleting Temporary Files"
+            Remove-Item $ExtractPath/flyway-$flywayVersion/ -Force -Recurse
+            Remove-Item $ExtractPath/*.zip -Force -Recurse
+        }
+        catch [System.IO.IOException] {
+            Write-Host "Moving Flyway CLI to $ExtractPath Root"
+            Move-Item $ExtractPath/flyway-$flywayVersion/* $ExtractPath -Force
+            Write-Host "Deleting Temporary Files"
+            Remove-Item $ExtractPath/flyway-$flywayVersion/ -Force -Recurse
+            Remove-Item $ExtractPath/*.zip -Force -Recurse
+        }
+        
+        Write-Host "Environtment Variables - Get Updated Values"
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","User") + ";" + [System.Environment]::GetEnvironmentVariable("Path","Machine")
+
+         # Add Flyway to the PATH if not already added (one-time setup)
+        if (-Not $Env:Path.Contains("C:\FlywayCLI")) {
+            [System.Environment]::SetEnvironmentVariable('Path', "C:\FlywayCLI;$([System.Environment]::GetEnvironmentVariable('Path', [System.EnvironmentVariableTarget]::User))", [System.EnvironmentVariableTarget]::User)
+            Write-Host "Updated Local Path Variable"
+            $env:Path = [System.Environment]::GetEnvironmentVariable("Path","User") + ";" + [System.Environment]::GetEnvironmentVariable("Path","Machine")
+            Write-Host "Flyway CLI added to Environment Variable PATH."
+        }
+
         # Verify the new version
         Write-Host "Flyway $flywayVersion is now installed in $ExtractPath."
-        "flyway -v" | cmd.exe
+        flyway -v
         Exit
     }
 } else {
@@ -81,9 +107,23 @@ if (Get-Command flyway -ErrorAction SilentlyContinue) {
     Expand-Archive -Path $DownloadZipFile -DestinationPath $ExtractPath -Force
     Write-Host "Flyway CLI Successfully Extracted to $ExtractPath"
 
+    try {
+        Write-Host "Moving Flyway CLI to $ExtractPath Root"
+        Move-Item $ExtractPath/flyway-$flywayVersion/* $ExtractPath
+        Write-Host "Deleting Temporary Files"
+        Remove-Item $ExtractPath/flyway-$flywayVersion/ -Force -Recurse
+        Remove-Item $ExtractPath/*.zip -Force -Recurse
+    }
+    catch [System.IO.IOException] {
+        Write-Host "Moving Flyway CLI to $ExtractPath Root"
+        Move-Item $ExtractPath/flyway-$flywayVersion/* $ExtractPath -Force
+    }
+
     # Add Flyway to the PATH if not already added (one-time setup)
     if (-Not $Env:Path.Contains("C:\FlywayCLI")) {
         [System.Environment]::SetEnvironmentVariable('Path', "C:\FlywayCLI;$([System.Environment]::GetEnvironmentVariable('Path', [System.EnvironmentVariableTarget]::User))", [System.EnvironmentVariableTarget]::User)
+        Write-Host "Updated Local Path Variable"
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","User") + ";" + [System.Environment]::GetEnvironmentVariable("Path","Machine")
         Write-Host "Flyway CLI added to Environment Variable PATH."
     }
     Write-Host "Flyway CLI Download and Install Complete"
