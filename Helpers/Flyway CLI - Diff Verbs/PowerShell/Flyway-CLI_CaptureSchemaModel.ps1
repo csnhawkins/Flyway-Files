@@ -22,10 +22,11 @@ if ($null -ne ${env:FLYWAY_PROJECT_PATH}) {
   $flywayTargetEnvironment = "${env:FLYWAY_TARGET_ENVIRONMENT}" # Options can be schemaModel, migrations, snapshot, empty, <<environment name>>
   $flywayTargetUsername = "${env:FLYWAY_TARGET_USERNAME}" # Optional - Can be used to specify database UserName is WindowsAuth or similar not utilized for the environment
   $flywayTargetPassword = "${env:FLYWAY_TARGET_PASSWORD}" # Optional - Can be used to specify database password is WindowsAuth or similar not utilized for the environment
+  $pauseForInput = "true" # Set to true for interactive testing
   } else {
   Write-Output "Using Local Variables for Flyway Project Settings"
   # Local Variables - If Env Variables Not Set
-  $flywayProjectPath = "C:\Redgate\GIT\Repos\AzureDevOps\Westwind" # Ensure flyway.toml is explicitly referenced in filepath
+  $flywayProjectPath = "C:\WorkingFolders\FWD\NewWorldDB" # Ensure flyway.toml is explicitly referenced in filepath
   $flywayProjectSettings = Join-Path $flywayProjectPath "flyway.toml"
   $flywayProjectSchemaModel = Join-Path $flywayProjectPath "schema-model"
   $flywayProjectMigrations = Join-Path $flywayProjectPath "migrations"
@@ -38,6 +39,7 @@ if ($null -ne ${env:FLYWAY_PROJECT_PATH}) {
   $flywayTargetEnvironment = "schemaModel" # Options can be schemaModel, migrations, snapshot, empty, <<environment name>>
   $flywayTargetUsername = "" # Optional - Can be used to specify database UserName is WindowsAuth or similar not utilized for the environment
   $flywayTargetPassword = "" # Optional - Can be used to specify database password is WindowsAuth or similar not utilized for the environment
+  $pauseForInput = "true" # Set to true for interactive testing
 }
 
 $tempArtifactFolder = Join-Path $env:LOCALAPPDATA "Temp\Redgate\Flyway Desktop\Artifacts\$([guid]::NewGuid().ToString())" 
@@ -61,18 +63,15 @@ $commonParams =
 # Flyway CLI - Verb Parameters List #
 
 # Step 1 - The Diff parameters define which source database or folder is compared against another. By default this is a development database against the Schema Model folder
-$diffParams = @("diff", "-diff.source=$flywaySourceEnvironment" ,"-environments.$flywaySourceEnvironment.user=$flywaySourceUsername" ,"-environments.$flywaySourceEnvironment.password=$flywaySourcePassword" ,"-diff.target=$flywayTargetEnvironment" ,"-environments.$flywayTargetEnvironment.user=$flywayTargetUsername" ,"-environments.$flywayTargetEnvironment.password=$flywayTargetPassword" ,"-diff.artifactFilename=$diffArtifactFilePath" ,"-outputType=json") + $commonParams
+$diffParams = @("diff", "-diff.source=$flywaySourceEnvironment" ,"-environments.$flywaySourceEnvironment.user=$flywaySourceUsername" ,"-environments.$flywaySourceEnvironment.password=$flywaySourcePassword" ,"-diff.target=$flywayTargetEnvironment" ,"-environments.$flywayTargetEnvironment.user=$flywayTargetUsername" ,"-environments.$flywayTargetEnvironment.password=$flywayTargetPassword" ,"-diff.artifactFilename=$diffArtifactFilePath" ,"-outputType=") + $commonParams
 
-# Step 2 - If differences are found above, they are shown in text form in the console output
-$diffTextParams = @("diffText", "-diffText.artifactFilename=$diffArtifactFilePath") + $commonParams
-
-# Step 3 - Differences are then applied to the target (This can be writing new definitions to the Schema Model or applying changes to a database)
+# Step 2 - Differences are then applied to the target (This can be writing new definitions to the Schema Model or applying changes to a database)
 $diffApplyParams = @("diffApply" ,"-diffApply.target=$flywayTargetEnvironment" ,"-diffApply.artifactFilename=$diffArtifactFilePath" ,"-outputType=") + $commonParams
 
 # Capture differences between Development environment and Schema Model
 Write-Host "Flyway CLI - Detecting differences in $flywaySourceEnvironment Environment"
 
-flyway @diffParams | Tee-Object -Variable diffList # Setting output to variable & showing in console
+flyway @diffParams | Tee-Object -Variable diffList
 
 # Check if the previous command was successful
 if ($? -eq $false) {
@@ -83,7 +82,6 @@ if ($? -eq $false) {
 # Check for "No differences found" in the result
 if ($diffList -match "No differences found") {
   Write-Output "Flyway CLI - No Differences Found. Script Completed."
-  
   # Clean-up: Remove temp artifact files
   try {
       Remove-Item $tempArtifactFolder -Recurse -Force -Confirm:$false
@@ -91,8 +89,11 @@ if ($diffList -match "No differences found") {
   } catch {
       Write-Error "Failed to remove temporary artifact files: $_"
   }
-
-  exit 0  # Success exit code
+  # Conditionally pause console until user input provided
+  if ($pauseForInput) {
+      Read-Host "Press any key to exit"
+      exit 0 # Success Exit Code
+  }  
 } else {
   Write-Output "Flyway CLI - Differences Found: Continuing to apply differences"
 }
@@ -105,6 +106,11 @@ flyway $diffApplyParams
 try {
   Remove-Item $tempArtifactFolder -Recurse -Force -Confirm:$false
   Write-Output "Temporary artifact files cleaned up."
+  # Conditionally pause console until user input provided
+  if ($pauseForInput) {
+    Read-Host "Press any key to exit"
+    exit 0 # Success Exit Code
+} 
 } catch {
   Write-Error "Failed to remove temporary artifact files: $_"
 }
