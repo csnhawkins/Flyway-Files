@@ -1,6 +1,6 @@
 # Variables #
 $DATABASE_NAME = "Westwind"
-$SOURCE_ENVIRONMENT = "schema-model"
+$SOURCE_ENVIRONMENT = "schemaModel"
 $SOURCE_DATABASE_JDBC = "jdbc:sqlserver://localhost;instanceName=SQLEXPRESS;databaseName=Westwind_Dev;encrypt=true;integratedSecurity=true;trustServerCertificate=true"
 $SOURCE_DATABASE_USER = ""
 $SOURCE_DATABASE_PASSWORD = ""
@@ -15,6 +15,8 @@ $FLYWAY_EMAIL = ""
 $FLYWAY_TOKEN = ""
 $WORKING_DIRECTORY = "C:\Redgate\GIT\Repos\AzureDevOps\Westwind"
 $ARTIFACT_DIRECTORY = "$WORKING_DIRECTORY\Artifacts"
+
+$pauseForInput = "false" # Set to true for interactive testing
 
 # Step 1 - Create Diff Artifact
 
@@ -35,15 +37,34 @@ flyway diff `
 -token="$FLYWAY_TOKEN"
 | Tee-Object -Variable flywayDiffs  # Capture Flyway Diff output to variable flywayDiffs and show output in console
 
-if ($flywayDiffs -like "*No differences found*") {
-  Write-Host "No changes to generate. Exiting script gracefully."
-  exit 0  # Graceful exit
-} else {
-  Write-Host "Changes detected. Proceeding with further steps."
+# Check if the previous command was successful
+if ($? -eq $false) {
+  Write-Error "Flyway CLI - Diff Command Failed. Exiting Session"
+  exit 2  # Custom exit code to indicate a failure in the difference check command
 }
 
-# Step 2 - Generate Deployment Script
+# Check for "No differences found" in the result
+if ($flywayDiffs -match "No differences found") {
+  Write-Output "Flyway CLI - No Differences Found. Script Completed."
+  # Clean-up: Remove temp artifact files
+  try {
+      Remove-Item $ARTIFACT_DIRECTORY -Recurse -Force -Confirm:$false
+      Write-Output "Temporary artifact files cleaned up."
+  } catch {
+      Write-Error "Failed to remove temporary artifact files: $_"
+  }
+  # Conditionally pause console until user input provided
+  if ($pauseForInput) {
+      Read-Host "Press any key to exit"
+      exit 0 # Success Exit Code
+  }  
+} else {
+  Write-Output "Flyway CLI - Differences Found: Continuing to apply differences"
+}
 
+
+# Step 2 - Generate Deployment Script
+Write-Output "Flyway CLI - Generating Deployment Script for $TARGET_ENVIRONMENT"
 flyway generate `
 "-generate.description=$FLYWAY_SCRIPT_DESCRIPTION" `
 "-generate.location=$WORKING_DIRECTORY/Artifacts/" `
@@ -55,7 +76,7 @@ flyway generate `
 "-configFiles=$WORKING_DIRECTORY\flyway.toml"
 
 # Step 3 - Deploy to target
-
+Write-Output "Flyway CLI - Deploying Changes to: $TARGET_ENVIRONMENT"
 flyway deploy `
 "-environment=$TARGET_ENVIRONMENT" `
 "-environments.$TARGET_ENVIRONMENT.url=$TARGET_DATABASE_JDBC" `
