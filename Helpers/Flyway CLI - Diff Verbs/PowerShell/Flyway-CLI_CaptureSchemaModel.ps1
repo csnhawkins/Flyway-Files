@@ -72,26 +72,29 @@ $diffApplyParams = @("diffApply" ,"-diffApply.target=$flywayTargetEnvironment" ,
 # Capture differences between Development environment and Schema Model
 Write-Host "Flyway CLI - Detecting differences in $flywaySourceEnvironment Environment"
 
-$diffList = flyway @diffParams | ConvertFrom-Json
+flyway @diffParams | Tee-Object -Variable diffList # Setting output to variable & showing in console
 
-$diffListIDs = $diffList.differences.id
+# Check if the previous command was successful
+if ($? -eq $false) {
+  Write-Error "Flyway CLI - Diff Command Failed. Exiting Session"
+  exit 2  # Custom exit code to indicate a failure in the difference check command
+}
 
-if ($null -ne $diffListIDs) {
-
-  Write-Output "Flyway CLI - Differences Found: See below for details"
-  flyway @diffTextParams
-
-} else {
-
-  Write-Output "Flyway CLI - No Differences Found. Script Completed"
+# Check for "No differences found" in the result
+if ($diffList -match "No differences found") {
+  Write-Output "Flyway CLI - No Differences Found. Script Completed."
+  
   # Clean-up: Remove temp artifact files
   try {
-    Remove-Item $tempArtifactFolder -Recurse -Force -Confirm:$false
-    Write-Output "Temporary artifact files cleaned up."
-    } catch {
-    Write-Error "Failed to remove temporary artifact files: $_"
-    }
-  exit 1
+      Remove-Item $tempArtifactFolder -Recurse -Force -Confirm:$false
+      Write-Output "Temporary artifact files cleaned up."
+  } catch {
+      Write-Error "Failed to remove temporary artifact files: $_"
+  }
+
+  exit 0  # Success exit code
+} else {
+  Write-Output "Flyway CLI - Differences Found: Continuing to apply differences"
 }
 
 Write-Output "Flyway CLI - Applying Differences to $flywayTargetEnvironment"
