@@ -15,6 +15,7 @@ $FLYWAY_EMAIL = ""
 $FLYWAY_TOKEN = ""
 
 $WORKING_DIRECTORY = "C:\Redgate\GIT\Repos\AzureDevOps\Westwind"
+$FLYWAY_PROJECT_SETTINGS = Join-Path $WORKING_DIRECTORY "flyway.toml"
 $ARTIFACT_DIRECTORY = "$WORKING_DIRECTORY\Artifacts"
 $SCRIPT_FILENAME = "Flyway-$DATABASE_NAME-AutoDeploymentScript-$(get-date -f yyyyMMdd).sql"
 
@@ -65,6 +66,7 @@ flyway prepare `
 "-environments.$TARGET_ENVIRONMENT.user=$TARGET_DATABASE_USER" `
 "-environments.$TARGET_ENVIRONMENT.password=$TARGET_DATABASE_PASSWORD" `
 "-prepare.scriptFilename=$ARTIFACT_DIRECTORY\$SCRIPT_FILENAME" `
+-configFiles="$FLYWAY_PROJECT_SETTINGS" `
 -email="$FLYWAY_EMAIL" `
 -token="$FLYWAY_TOKEN"
 
