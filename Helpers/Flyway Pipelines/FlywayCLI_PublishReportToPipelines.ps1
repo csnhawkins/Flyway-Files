@@ -5,8 +5,8 @@ $BASELINE_VERSION = ($null -ne ${env:BASELINE_VERSION}) ? ${env:BASELINE_VERSION
 $FLYWAY_LICENSE_KEY = ($null -ne ${env:FLYWAY_LICENSE_KEY}) ? ${env:FLYWAY_LICENSE_KEY} : ""
 $FLYWAY_PROJECT_LOCATION = ($null -ne ${env:WORKING_DIRECTORY}) ? ${env:WORKING_DIRECTORY} : "C:\Redgate\GIT\Repos\AzureDevOps\Westwind"
 $FLYWAY_PUBLISH = ($null -ne ${env:FLYWAY_PUBLISH}) ? ${env:FLYWAY_PUBLISH} : "true"
-$FLYWAY_EMAIL = ($null -ne ${env:FLYWAY_EMAIL}) ? ${env:FLYWAY_EMAIL} : "Chris.Hawkins@red-gate.com"
-$FLYWAY_TOKEN = ($null -ne ${env:FLYWAY_TOKEN}) ? ${env:FLYWAY_TOKEN} : "zzw3XaSDtJJfIJOwwrL8cnE3l8vgOVBxjFwGxiV7dEvHNGHyqx6zt5TI02ImBHH7wsCy+sNaBZrb/Py+zRO18w=="
+$FLYWAY_EMAIL = ($null -ne ${env:FLYWAY_EMAIL}) ? ${env:FLYWAY_EMAIL} : ""
+$FLYWAY_TOKEN = ($null -ne ${env:FLYWAY_TOKEN}) ? ${env:FLYWAY_TOKEN} : ""
 
 flyway info migrate info `
 "-environment=$TARGET_ENVIRONMENT" `
