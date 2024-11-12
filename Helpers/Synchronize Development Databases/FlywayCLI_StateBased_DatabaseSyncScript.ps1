@@ -55,8 +55,8 @@ $ARTIFACT_DIRECTORY = "$PROJECT_DIRECTORY\deployments"
 $SCRIPT_FILENAME = "FlywayCLI_$coreDB_deploymentscript_$(get-date -f yyyyMMdd).sql"
 $DATABASE_NAME = $coreDB + '_Dev'
 $TARGET_ENVIRONMENT = "development"
-$TARGET_DATABASE_JDBC = "jdbc:sqlserver://$serverName;databaseName=$DATABASE_NAME;encrypt=$encryptConnectionBoolean;integratedSecurity=$TARGET_DATABAE_INTEGRATED_SECURITY;trustServerCertificate=$trustCertBoolean"
-$TARGET_DATABAE_INTEGRATED_SECURITY = "true"
+$TARGET_DATABASE_INTEGRATED_SECURITY = "true"
+$TARGET_DATABASE_JDBC = "jdbc:sqlserver://$serverName;databaseName=$DATABASE_NAME;encrypt=$encryptConnectionBoolean;integratedSecurity=$TARGET_DATABASE_INTEGRATED_SECURITY;trustServerCertificate=$trustCertBoolean"
 $TARGET_DATABASE_USERNAME = ""
 $TARGET_DATABASE_PASSWORD = ""
 ###
