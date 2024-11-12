@@ -8,38 +8,63 @@ if (!(Get-Module -ListAvailable -Name dbatools)) {
   Write-Host "dbatools module is already installed."
 }
 # Prompt for input
-if (!($projectDir = Read-Host "Enter the top level local GIT folder location: (Leave Blank for Default Value: C:\WorkingFolders\FWD)")) { $projectDir = "C:\WorkingFolders\FWD" }
-if (!($serverName = Read-Host "Enter the SQL Server name (Leave Blank for Default Value: Localhost)")) { $serverName = "Localhost" }
+if (!($projectDir = Read-Host "Enter the Parent GIT Folder Location: (Leave Blank for Default Value: C:\WorkingFolders\FWD)")) { $projectDir = "C:\WorkingFolders\FWD" }
+if (!($serverName = Read-Host "Enter the SQL Server Host Name (Leave Blank for Default Value: Localhost)")) { $serverName = "Localhost" }
+if (!($instanceName = Read-Host "Enter the SQL Server Instance Name (If Required)")) { $instanceName = "" }
+if ([string]::IsNullOrWhiteSpace($instanceName)) {
+  $sqlInstance = $serverName
+} else {
+  $sqlInstance = "$serverName\$instanceName"
+}
 
 do {
   $trustCert = Read-Host "Do we need to trust the Server Certificate [Y] or [N]?"
   $trustCert = $trustCert.ToUpper()  # Convert the input to uppercase
-  $trustCertBoolean = ($trustCert -eq 'Y') ? "true" : "false"
+  # Initialize the boolean variable based on user input
+  if ($trustCert -eq 'Y') {
+      $trustCertBoolean = "true"
+  } else {
+      $trustCertBoolean = "false"
+  }
 }
 until ($trustCert -eq 'Y' -or $trustCert -eq 'N')  # Proper comparison
 do {
   $encryptConnection = Read-Host "Do we need to encrypt the connection [Y] or [N]?"
   $encryptConnection = $trustCert.ToUpper()  # Convert the input to uppercase
-  $encryptConnectionBoolean = ($encryptConnection -eq 'Y') ? "true" : "false"
+
+  # Initialize the boolean variable based on user input
+  if ($encryptConnection -eq 'Y') {
+      $encryptConnectionBoolean = "true"
+  } else {
+      $encryptConnectionBoolean = "false"
+  }
 }
 until ($trustCert -eq 'Y' -or $trustCert -eq 'N')  # Proper comparison
 #Block to generate connection string
 if ($trustCert -eq 'Y' -and $encryptConnection -eq 'Y')
 {
-$SqlConnection = Connect-DbaInstance -SqlInstance $serverName -TrustServerCertificate -EncryptConnection
+$SqlConnection = Connect-DbaInstance -SqlInstance $sqlInstance -TrustServerCertificate -EncryptConnection
 }
 if ($trustCert -eq 'Y' -and $encryptConnection -eq 'N')
 {
-$SqlConnection = Connect-DbaInstance -SqlInstance $serverName -TrustServerCertificate
+$SqlConnection = Connect-DbaInstance -SqlInstance $sqlInstance -TrustServerCertificate
 }
 if ($trustCert -eq 'N' -and $encryptConnection -eq 'Y')
 {
-$SqlConnection = Connect-DbaInstance -SqlInstance $serverName -EncryptConnection
+$SqlConnection = Connect-DbaInstance -SqlInstance $sqlInstance -EncryptConnection
 }
 if ($trustCert -eq 'N' -and $encryptConnection -eq 'N')
 {
-$SqlConnection = Connect-DbaInstance -SqlInstance $serverName
+$SqlConnection = Connect-DbaInstance -SqlInstance $sqlInstance
 }
+
+# Check if the previous command was successful
+if ($? -eq $false) {
+  Write-Error "SQL Server - Unable to connect - Check all connection details"
+  Write-Error "Connection Details Provided - Server Name: $serverName - Instance Name: $instanceName"
+  exit 2  # Custom exit code to indicate a failure in the difference check command
+}
+
 $coreDBList = @(
   'Aardvark',
   'NewWorldDB',
@@ -52,16 +77,15 @@ Write-Host "### Flyway CLI - Development Database Sync - $coreDB ###"
 ### Variables ###
 $PROJECT_DIRECTORY = "$projectDir\$coreDB"
 $ARTIFACT_DIRECTORY = "$PROJECT_DIRECTORY\deployments"
-$SCRIPT_FILENAME = "FlywayCLI_$coreDB_deploymentscript_$(get-date -f yyyyMMdd).sql"
+$SCRIPT_FILENAME = "FlywayCLI_${coreDB}_deploymentscript_$(get-date -f yyyyMMdd).sql"
 $DATABASE_NAME = $coreDB + '_Dev'
 $TARGET_ENVIRONMENT = "development"
 $TARGET_DATABASE_INTEGRATED_SECURITY = "true"
-$TARGET_DATABASE_JDBC = "jdbc:sqlserver://$serverName;databaseName=$DATABASE_NAME;encrypt=$encryptConnectionBoolean;integratedSecurity=$TARGET_DATABASE_INTEGRATED_SECURITY;trustServerCertificate=$trustCertBoolean"
 $TARGET_DATABASE_USERNAME = ""
 $TARGET_DATABASE_PASSWORD = ""
+$TARGET_DATABASE_JDBC = "jdbc:sqlserver://$serverName;databaseName=$DATABASE_NAME;instanceName=$instanceName;encrypt=$encryptConnectionBoolean;integratedSecurity=$TARGET_DATABASE_INTEGRATED_SECURITY;trustServerCertificate=$trustCertBoolean"
+
 ###
-
-
 
 Set-Location $PROJECT_DIRECTORY
 Write-Host "Creating database $coreDB within $serverName if required"
