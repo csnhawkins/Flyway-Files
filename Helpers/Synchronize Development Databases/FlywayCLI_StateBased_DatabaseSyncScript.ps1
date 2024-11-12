@@ -36,7 +36,7 @@ $SqlConnection = Connect-DbaInstance -SqlInstance $serverName -EncryptConnection
 }
 if ($trustCert -eq 'N' -and $encryptConnection -eq 'N')
 {
-$SqlConnection = Connect-DbaInstance -SqlInstance $serverName -TrustServerCertificate -EncryptConnection
+$SqlConnection = Connect-DbaInstance -SqlInstance $serverName
 }
 $coreDBList = @(
   'Aardvark',
@@ -61,7 +61,7 @@ GO
 "@
 Invoke-DbaQuery -Query $CreateDB -SqlInstance $sqlConnection
 Write-Host "Flyway CLI - Detecting differences between schemaModel & $coreDB"
-flyway prepare "-prepare.source=schemaModel" "-prepare.target=development" -schemaModelLocation="$projectDir\$coreDB\schema-model" "-prepare.scriptFilename=$ARTIFACT_DIRECTORY\$SCRIPT_FILENAME" | Tee-Object -Variable flywayDiffs
+flyway prepare "-prepare.source=schemaModel" "-prepare.target=development" -schemaModelLocation="$projectDir\$coreDB\schema-model" "-prepare.scriptFilename=$ARTIFACT_DIRECTORY\$SCRIPT_FILENAME" "-configFiles=$PROJECT_DIRECTORY\flyway.toml" | Tee-Object -Variable flywayDiffs
 
 # Check if the previous command was successful
 if ($? -eq $false) {
@@ -74,7 +74,7 @@ if ($flywayDiffs -match "No script generated") {
 } else {
   Write-Output "Flyway CLI - Differences Found: Continuing to apply differences"
   Write-Output "Flyway CLI - Deploying Changes to: $coreDB"
-  flyway deploy "-environment=development" "-deploy.scriptFilename=$ARTIFACT_DIRECTORY\$SCRIPT_FILENAME"
+  flyway deploy "-environment=development" "-deploy.scriptFilename=$ARTIFACT_DIRECTORY\$SCRIPT_FILENAME" "-configFiles=$PROJECT_DIRECTORY\flyway.toml"
 
   # Clean-up: Remove temp artifact files
   try {
