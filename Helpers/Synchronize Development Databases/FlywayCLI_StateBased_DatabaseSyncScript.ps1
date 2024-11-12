@@ -14,11 +14,13 @@ if (!($serverName = Read-Host "Enter the SQL Server name (Leave Blank for Defaul
 do {
   $trustCert = Read-Host "Do we need to trust the Server Certificate [Y] or [N]?"
   $trustCert = $trustCert.ToUpper()  # Convert the input to uppercase
+  $trustCertBoolean = ($trustCert -eq 'Y') ? "true" : "false"
 }
 until ($trustCert -eq 'Y' -or $trustCert -eq 'N')  # Proper comparison
 do {
   $encryptConnection = Read-Host "Do we need to encrypt the connection [Y] or [N]?"
   $encryptConnection = $trustCert.ToUpper()  # Convert the input to uppercase
+  $encryptConnectionBoolean = ($encryptConnection -eq 'Y') ? "true" : "false"
 }
 until ($trustCert -eq 'Y' -or $trustCert -eq 'N')  # Proper comparison
 #Block to generate connection string
@@ -46,22 +48,33 @@ $coreDBList = @(
 foreach ($coreDB in $coreDBList)
 {
 Write-Host "### Flyway CLI - Development Database Sync - $coreDB ###"
+
+### Variables ###
 $PROJECT_DIRECTORY = "$projectDir\$coreDB"
 $ARTIFACT_DIRECTORY = "$PROJECT_DIRECTORY\deployments"
 $SCRIPT_FILENAME = "FlywayCLI_$coreDB_deploymentscript_$(get-date -f yyyyMMdd).sql"
+$DATABASE_NAME = $coreDB + '_Dev'
+$TARGET_ENVIRONMENT = "development"
+$TARGET_DATABASE_JDBC = "jdbc:sqlserver://$serverName;databaseName=$DATABASE_NAME;encrypt=$encryptConnectionBoolean;integratedSecurity=$TARGET_DATABAE_INTEGRATED_SECURITY;trustServerCertificate=$trustCertBoolean"
+$TARGET_DATABAE_INTEGRATED_SECURITY = "true"
+$TARGET_DATABASE_USERNAME = ""
+$TARGET_DATABASE_PASSWORD = ""
+###
+
+
+
 Set-Location $PROJECT_DIRECTORY
 Write-Host "Creating database $coreDB within $serverName if required"
-$db1 = $coreDB + '_Dev'
 $CreateDB = @"
-IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = '$db1')
+IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = '$DATABASE_NAME')
 BEGIN
-CREATE DATABASE $db1;
+CREATE DATABASE $DATABASE_NAME;
 END;
 GO
 "@
 Invoke-DbaQuery -Query $CreateDB -SqlInstance $sqlConnection
 Write-Host "Flyway CLI - Detecting differences between schemaModel & $coreDB"
-flyway prepare "-prepare.source=schemaModel" "-prepare.target=development" -schemaModelLocation="$projectDir\$coreDB\schema-model" "-prepare.scriptFilename=$ARTIFACT_DIRECTORY\$SCRIPT_FILENAME" "-configFiles=$PROJECT_DIRECTORY\flyway.toml" | Tee-Object -Variable flywayDiffs
+flyway prepare "-prepare.source=schemaModel" "-prepare.target=$TARGET_ENVIRONMENT" "-environments.$TARGET_ENVIRONMENT.url=$TARGET_DATABASE_JDBC" "-environments.$TARGET_ENVIRONMENT.user=$TARGET_DATABASE_USERNAME" "-environments.$TARGET_ENVIRONMENT.password=$TARGET_DATABASE_PASSWORD" "-schemaModelLocation=$projectDir\$coreDB\schema-model" "-prepare.scriptFilename=$ARTIFACT_DIRECTORY\$SCRIPT_FILENAME" "-configFiles=$PROJECT_DIRECTORY\flyway.toml" | Tee-Object -Variable flywayDiffs
 
 # Check if the previous command was successful
 if ($? -eq $false) {
@@ -74,7 +87,7 @@ if ($flywayDiffs -match "No script generated") {
 } else {
   Write-Output "Flyway CLI - Differences Found: Continuing to apply differences"
   Write-Output "Flyway CLI - Deploying Changes to: $coreDB"
-  flyway deploy "-environment=development" "-deploy.scriptFilename=$ARTIFACT_DIRECTORY\$SCRIPT_FILENAME" "-configFiles=$PROJECT_DIRECTORY\flyway.toml"
+  flyway deploy "-environment=$TARGET_ENVIRONMENT" "-environments.$TARGET_ENVIRONMENT.url=$TARGET_DATABASE_JDBC" "-environments.$TARGET_ENVIRONMENT.user=$TARGET_DATABASE_USERNAME" "-environments.$TARGET_ENVIRONMENT.password=$TARGET_DATABASE_PASSWORD" "-deploy.scriptFilename=$ARTIFACT_DIRECTORY\$SCRIPT_FILENAME" "-configFiles=$PROJECT_DIRECTORY\flyway.toml"
 
   # Clean-up: Remove temp artifact files
   try {
