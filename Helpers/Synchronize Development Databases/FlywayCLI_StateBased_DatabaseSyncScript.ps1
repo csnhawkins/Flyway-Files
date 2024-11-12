@@ -14,13 +14,24 @@ if (!($serverName = Read-Host "Enter the SQL Server name (Leave Blank for Defaul
 do {
   $trustCert = Read-Host "Do we need to trust the Server Certificate [Y] or [N]?"
   $trustCert = $trustCert.ToUpper()  # Convert the input to uppercase
-  $trustCertBoolean = ($trustCert -eq 'Y') ? "true" : "false"
+  # Initialize the boolean variable based on user input
+  if ($trustCert -eq 'Y') {
+      $trustCertBoolean = "true"
+  } else {
+      $trustCertBoolean = "false"
+  }
 }
 until ($trustCert -eq 'Y' -or $trustCert -eq 'N')  # Proper comparison
 do {
   $encryptConnection = Read-Host "Do we need to encrypt the connection [Y] or [N]?"
   $encryptConnection = $trustCert.ToUpper()  # Convert the input to uppercase
-  $encryptConnectionBoolean = ($encryptConnection -eq 'Y') ? "true" : "false"
+
+  # Initialize the boolean variable based on user input
+  if ($encryptConnection -eq 'Y') {
+      $encryptConnectionBoolean = "true"
+  } else {
+      $encryptConnectionBoolean = "false"
+  }
 }
 until ($trustCert -eq 'Y' -or $trustCert -eq 'N')  # Proper comparison
 #Block to generate connection string
