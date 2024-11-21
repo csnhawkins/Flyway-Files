@@ -4,7 +4,7 @@
    This script will do the following:
       1. Disable all table constraints
       2. Create a list of all tables, across all schemas (Apart from system tables and diagrams)
-      3. Cycle through all tables above, using DELETE FROM to remove all data (This is to avoid constraint issues)
+      3. Cycle through all tables above, using TRUNCATE or DELETE FROM (TRUNCATE if possible for speed, where constraints won't be an issue) to remove all data.
       4. Re-Enable Table Constraints 
 */
 USE <DB name>; -- Update <DB Name> to match the name of the target database to remove data from
