@@ -63,7 +63,7 @@ if ($flywayVersion -ieq "latest") {
         Write-Error "Failed to retrieve or process the webpage. Error: $_"
     }
 } else {
-    Write-Output "Flyway Version Number Variable is not 'latest', likely syntax error. Current value: $flywayVersion"
+    Write-Output "Flyway Version Number Variable is not 'latest', Current Version to Install: $flywayVersion"
 }
 
 Write-Host "Using Flyway CLI version $flywayVersion"
