@@ -13,7 +13,8 @@ if ($null -ne ${env:FLYWAY_PROJECT_PATH}) {
   $flywayProjectSettings = Join-Path $flywayProjectPath "flyway.toml"
   $flywayProjectSchemaModel = Join-Path $flywayProjectPath "schema-model"
   $flywayVersionDescription = "${env:FLYWAY_VERSION_DESCRIPTION}" # This will be the description for the Auto-Generated migration script
-  $flywayLicenseKey = "${env:FLYWAY_LICENSE_KEY}"
+  $flywayEmail = "${env:FLYWAY_EMAIL}"
+  $flywayToken = "${env:FLYWAY_TOKEN}"
   # Optional - Environment Details
   $flywaySourceEnvironment = "${env:FLYWAY_SOURCE_ENVIRONMENT}" # Options can be schemaModel, migrations, snapshot, empty, <<environment name>>
   $flywaySourceUsername = "${env:FLYWAY_SOURCE_USERNAME}" # Optional - Can be used to specify database UserName is WindowsAuth or similar not utilized for the environment
@@ -28,18 +29,19 @@ if ($null -ne ${env:FLYWAY_PROJECT_PATH}) {
   $flywayProjectSettings = Join-Path $flywayProjectPath "flyway.toml"
   $flywayProjectSchemaModel = Join-Path $flywayProjectPath "schema-model"
   $flywayVersionDescription = "FlywayCLIAutomatedScript" # This will be the description for the Auto-Generated migration script
-  $flywayLicenseKey = ""
+  $flywayEmail = "" # Email address associated with the Redgate Portal Personal Access Token
+  $flywayToken = "" # Personal Access Token created from the Redgate Portal
   # Optional - Environment Details
   $flywaySourceEnvironment = "schemaModel" # Options can be schemaModel, migrations, snapshot, empty, <<environment name>>
   $flywaySourceUsername = "" # Optional - Can be used to specify database UserName is WindowsAuth or similar not utilized for the environment
   $flywaySourcePassword = "" # Optional - Can be used to specify database password is WindowsAuth or similar not utilized for the environment
   $flywayTargetEnvironment = "build" # Options can be schemaModel, migrations, snapshot, empty, <<environment name>>
-  $flywayTargetUsername = "" # Optional - Can be used to specify database UserName is WindowsAuth or similar not utilized for the environment
-  $flywayTargetPassword = "" # Optional - Can be used to specify database password is WindowsAuth or similar not utilized for the environment
+  $flywayTargetUsername = "Redgate" # Optional - Can be used to specify database UserName is WindowsAuth or similar not utilized for the environment
+  $flywayTargetPassword = "Redg@te1" # Optional - Can be used to specify database password is WindowsAuth or similar not utilized for the environment
 }
 
 $tempArtifactFolder = Join-Path $env:LOCALAPPDATA "Temp\Redgate\Flyway Desktop\Artifacts\$([guid]::NewGuid().ToString())" 
-$diffArtifactFileName = "Flyway.$flywaySourceEnvironment.differences-$(get-date -f yyyyMMdd).zip"
+$diffArtifactFileName = "Flyway.$flywaySourceEnvironment.differences-$(get-date -f yyyyMMdd).sql"
 if (-not (Test-Path $tempArtifactFolder)) {
   New-Item -ItemType Directory -Force -Path $tempArtifactFolder | Out-Null
 }
@@ -59,59 +61,26 @@ $commonParams =
 # Flyway CLI - Verb Parameters List #
 
 # Step 1 - The Diff parameters define which source database or folder is compared against another. By default this is a Schema Model folder against a target database
-$diffParams = @("diff", "-diff.source=$flywaySourceEnvironment" ,"-environments.$flywaySourceEnvironment.user=$flywaySourceUsername" ,"-environments.$flywaySourceEnvironment.password=$flywaySourcePassword" ,"-diff.target=$flywayTargetEnvironment" ,"-environments.$flywayTargetEnvironment.user=$flywayTargetUsername" ,"-environments.$flywayTargetEnvironment.password=$flywayTargetPassword" ,"-diff.artifactFilename=$diffArtifactFilePath" ,"-outputType=json") + $commonParams
+$prepareParams = @("prepare", "-prepare.source=$flywaySourceEnvironment" ,"-environments.$flywaySourceEnvironment.user=$flywaySourceUsername" ,"-environments.$flywaySourceEnvironment.password=$flywaySourcePassword" ,"-prepare.target=$flywayTargetEnvironment" ,"-environments.$flywayTargetEnvironment.user=$flywayTargetUsername" ,"-environments.$flywayTargetEnvironment.password=$flywayTargetPassword" ,"-prepare.scriptFilename=$diffArtifactFilePath" ,"-outputType=") + $commonParams
 
-# Step 2 - If differences are found above, they are shown in text form in the console output
-$diffTextParams = @("diffText", "-diffText.artifactFilename=$diffArtifactFilePath") + $commonParams
-
-# Step 3 - All differences are then generated into a deployment script
-$generateParams = @("generate", "-generate.description=$flywayVersionDescription" ,"-generate.location=$tempArtifactFolder" ,"-generate.types=versioned,undo" ,"-generate.artifactFilename=$diffArtifactFilePath" ,"-generate.addTimestamp=true") + $commonParams
-
-# Step 4 - Differences are then applied to the target (This can be writing new definitions to the Schema Model or applying changes to a database)
-$diffApplyParams = @("diffApply" ,"-diffApply.target=$flywayTargetEnvironment" ,"-diffApply.artifactFilename=$diffArtifactFilePath" ,"-outputType=") + $commonParams
+# Step 2 - Differences are then applied to the target (This can be writing new definitions to the Schema Model or applying changes to a database)
+$deployParams = @("deploy" ,"-environment=$flywayTargetEnvironment" ,"-environments.$flywayTargetEnvironment.user=$flywayTargetUsername" ,"-environments.$flywayTargetEnvironment.password=$flywayTargetPassword" ,"-deploy.scriptFilename=$diffArtifactFilePath") + $commonParams
 
 # Capture differences between Development environment and Schema Model
 Write-Host "Flyway CLI - Detecting differences between Source - $flywaySourceEnvironment & Target - $flywayTargetEnvironment"
 
-$diffList = flyway @diffParams | ConvertFrom-Json
+flyway @prepareParams | Tee-Object -Variable flywayDiffs  # Capture Flyway Diff output to variable flywayDiffs and show output in console
 
-$diffListIDs = $diffList.differences.id
-
-if ($null -ne $diffListIDs) {
-
-  Write-Output "Flyway CLI - Differences Found: See below for details"
-  flyway @diffTextParams
-
+if ($flywayDiffs -like "*no differences detected*") {
+  Write-Host "No changes to generate. Exiting script gracefully."
+  exit 0  # Graceful exit
 } else {
-
-  Write-Output "Flyway CLI - No Differences Found. Script Completed"
-  # Clean-up: Remove temp artifact files
-  try {
-    Remove-Item $tempArtifactFolder -Recurse -Force -Confirm:$false
-    Write-Output "Temporary artifact files cleaned up."
-    } catch {
-    Write-Error "Failed to remove temporary artifact files: $_"
-    }
-  exit 1
+  Write-Host "Changes detected. Proceeding with further steps."
 }
 
-Write-output "Flyway CLI - Create Dry Run Deployment Script"
-
-flyway $generateParams
-
-Write-Output "The Dry Run Script can be found here: $diffArtifactFilePath"
-
-# Prompt for deployment
-$continue = Read-Host "Review Deployment Script above. Deploy script? (y/n)"
-if ($continue -notlike "y") {
-    Write-Output 'Response not like "y". Target has NOT been updated.'
-    exit 1
-}
-
-
-Write-Output "Flyway CLI - Applying Differences to $flywayTargetEnvironment"
+Write-Output "Flyway CLI - Deploying Differences to $flywayTargetEnvironment"
 # Apply differences from artifact to Schema Model
-flyway $diffApplyParams
+flyway $deployParams
 
 # Clean-up: Remove temp artifact files
 try {
