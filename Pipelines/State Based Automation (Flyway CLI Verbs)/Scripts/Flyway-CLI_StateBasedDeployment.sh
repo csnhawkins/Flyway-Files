@@ -1,104 +1,81 @@
 #!/bin/bash
-
 echo "Flyway CLI - Automatic Schema Model Capture"
 # FLyway CLI - Global Settings #
-REDGATE_FLYWAY_DIFF_VERB="${REDGATE_FLYWAY_DIFF_VERB:-true}" # Enables Alpha Diff Verbs within Flyway CLI
-export REDGATE_FLYWAY_DIFF_VERB # Exports to Environment Variable (Comment out if already set or not enough permissions)
-DEPLOY_DIFFERENCES="${DEPLOY_DIFFERENCES:-NOT SET}" # Variable to determine if the change should be deployed or not. Uses environment variable and if not found will default to NOTSET
-
+# To assist with script validation, parameter expansions have been used for important variables. For example: ${VARNAME:-DefaultValue}
+# This means that the variable is first attempted to be set with VARNAME, which if not found defaults to the value specified after :-
+DEPLOY_DIFFERENCES="${DEPLOY_DIFFERENCES:-true}" # Variable to determine if the change should be deployed or not. Uses environment variable and if not found will default to NOTSET
 # Flyway CLI - Project Settings # 
 flywayProjectName="${FLYWAY_PROJECT_NAME:-MyFlywayProject}" # Optional Project name used within reports and temp file naming
-flywayProjectPath="$WORKING_DIRECTORY" # Ensure flyway.toml is explicitly referenced in filepath
+flywayProjectPath="${WORKING_DIRECTORY:-/mnt/c/Redgate/GIT/Repos/AzureDevOps/Westwind}" # Ensure flyway.toml is explicitly referenced in filepath
 flywayProjectSettings="$flywayProjectPath/flyway.toml"
 flywayProjectSchemaModel="$flywayProjectPath/schema-model"
 flywayProjectMigrations="$flywayProjectPath/migrations"
 flywayVersionDescription="${FLYWAY_VERSION_DESCRIPTION:-FlywayCLIAutomatedScript}" # This will be the description for the Auto-Generated migration script
-flywayLicenseKey="$FLYWAY_LICENSE_KEY"
+### Flyway Auth Settings ###
+FLYWAY_EMAIL="${FLYWAY_EMAIL:-MyRedgateEmail@email.com}"
+FLYWAY_TOKEN="${FLYWAY_TOKEN:-MySecureTokenGoesHere}"
 # Flyway CLI - Environment Details
 flywaySourceEnvironment="${SOURCE_ENVIRONMENT:-schemaModel}" # Options can be schemaModel, migrations, snapshot, empty, <<environment name>>
-flywaySourceJDBC="$SOURCE_JDBC" # Optional - Leave blank to use Environment settings
-flywaySourceUsername="$SOURCE_DATABASE_USERNAME" # Optional - Can be used to specify database UserName is WindowsAuth or similar not utilized for the environment
-flywaySourcePassword="$SOURCE_DATABASE_PASSWORD" # Optional - Can be used to specify database password is WindowsAuth or similar not utilized for the environment
+flywaySourceJDBC="${SOURCE_JDBC:-}" # Optional - Leave blank to use Environment settings
+flywaySourceUsername="${SOURCE_DATABASE_USERNAME:-MyDefaultUsername}" # Optional - Can be used to specify database UserName is WindowsAuth or similar not utilized for the environment
+flywaySourcePassword="${SOURCE_DATABASE_PASSWORD:-MyDefaultPassword}" # Optional - Can be used to specify database password is WindowsAuth or similar not utilized for the environment
 flywayTargetEnvironment="${TARGET_ENVIRONMENT:-Test}" # Options can be schemaModel, migrations, snapshot, empty, <<environment name>>
-flywayTargetJDBC="$TARGET_JDBC" # Optional - Leave blank to use Environment settings
-flywayTargetUsername="$TARGET_DATABASE_USERNAME" # Optional - Can be used to specify database UserName is WindowsAuth or similar not utilized for the environment
-flywayTargetPassword="$TARGET_DATABASE_PASSWORD" # Optional - Can be used to specify database password is WindowsAuth or similar not utilized for the environment
-
-diffArtifactFileName="Flyway_${flywayProjectName}_${flywaySourceEnvironment}_differences-$(date +"%d-%m-%Y").zip"
+flywayTargetJDBC="${TARGET_JDBC:-jdbc:sqlserver://127.0.0.1;databaseName=Westwind_Build;encrypt=true;integratedSecurity=false;trustServerCertificate=true}" # Optional - Leave blank to use Environment settings
+flywayTargetUsername="${TARGET_DATABASE_USERNAME:-sa}" # Optional - Can be used to specify database UserName is WindowsAuth or similar not utilized for the environment
+flywayTargetPassword="${TARGET_DATABASE_PASSWORD:-Redg@te1}" # Optional - Can be used to specify database password is WindowsAuth or similar not utilized for the environment
+diffArtifactFileName="Flyway_${flywayProjectName}_${flywaySourceEnvironment}_differences-$(date +"%d-%m-%Y").sql"
 diffArtifactFolder="$flywayProjectPath/Artifacts/$flywayProjectName/"
 diffArtifactFilePath="$diffArtifactFolder/$diffArtifactFileName"
-
 echo "Project Path = $flywayProjectPath | Settings are $flywayProjectSettings"
-
 echo "Flyway CLI - Detecting Differences between $flywaySourceEnvironment and $flywayTargetEnvironment"
-
 echo "Current Working Directory Is: $(pwd)"
 echo "Files in current folder are:\n$(ls)"
-
-diffList=$(flyway diff \
--diff.source="$flywaySourceEnvironment" \
--diff.target="$flywayTargetEnvironment" \
--environments.$flywayTargetEnvironment.url="$flywayTargetJDBC" \
--environments.$flywayTargetEnvironment.user="$flywayTargetUsername" \
--environments.$flywayTargetEnvironment.password="$flywayTargetPassword" \
--diff.artifactFilename="$diffArtifactFilePath" \
--outputType="" \
--licenseKey="$flywayLicenseKey" \
--configFiles="$flywayProjectSettings" \
--schemaModelLocation="$flywayProjectSchemaModel" || { echo 'Flyway CLI - Diff Command Failed' ; exit 1; })
+diffList=$(flyway prepare \
+    -prepare.source="$flywaySourceEnvironment" \
+    -prepare.target="$flywayTargetEnvironment" \
+    -environments.$flywayTargetEnvironment.url="$flywayTargetJDBC" \
+    -environments.$flywayTargetEnvironment.user="$flywayTargetUsername" \
+    -environments.$flywayTargetEnvironment.password="$flywayTargetPassword" \
+    -prepare.scriptFilename="$diffArtifactFilePath" \
+    -prepare.force="true" \
+    -email="$FLYWAY_EMAIL" \
+    -token="$FLYWAY_TOKEN" \
+    -configFiles="$flywayProjectSettings" \
+    -schemaModelLocation="$flywayProjectSchemaModel") || {
+     echo 'Flyway CLI - Diff Command Failed'
+     exit 1 
+    }
 
 echo "$diffList"
 
 echo "Script Validation - Check if any differences found"
 
 # Run the flyway command and check for "No differences found"
-if echo "$diffList" | grep -q "No differences found"; then
-    echo "No differences found, stopping script."
-    # Remove Temporary Artifacts #
-    echo "Clean Up: Deleting temporary artifact files"
-    rm -r $diffArtifactFolder
+if echo "$diffList" | grep -q "no differences detected"; then
+    echo "No differences detected, stopping script."
     exit 0  # Stop the script
 else
     echo "Differences found, continuing script."
     # Continue with the rest of your script
 fi
 
-# Generate Dry Run Script for pending differences (Can be skipped if doing a deployment)
-
-if [ "$DEPLOY_DIFFERENCES" != "true" ] ; then
-    echo "Flyway CLI - Generate Deployment Script For: $flywayTargetEnvironment"
-    flyway generate \
-    -generate.description="$flywayVersionDescription" \
-    -generate.location="$flywayProjectPath/Artifacts/" \
-    -generate.types="versioned,undo" \
-    -generate.artifactFilename="$diffArtifactFilePath" \
-    -outputType="" \
-    -generate.force="true" \
-    -licenseKey="$flywayLicenseKey" \
-    -configFiles="$flywayProjectSettings" \
-    -schemaModelLocation="$flywayProjectSchemaModel" || { echo 'Flyway CLI - Generate Command Failed' ; exit 1; }
-else
-    echo "Flyway - CLI - Skipping Dry Run Script Generation Stage Due to DEPLOY_DIFFERENCES variable set to false"
-fi
-
-# Deploying differences to target environment #
-
-if [ "$DEPLOY_DIFFERENCES" = "true" ]; then
-    echo "Flyway CLI - Apply Differences to Target Environment: $flywayTargetEnvironment"
-    flyway diffApply \
-    -diffApply.target="$flywayTargetEnvironment" \
+if [ "$DEPLOY_DIFFERENCES" = "true" ] ; then
+    echo "Flyway CLI - Deploy Differences to Target Environment: $flywayTargetEnvironment"
+    flyway deploy \
+    -environment="$flywayTargetEnvironment" \
     -environments.$flywayTargetEnvironment.url="$flywayTargetJDBC" \
     -environments.$flywayTargetEnvironment.user="$flywayTargetUsername" \
     -environments.$flywayTargetEnvironment.password="$flywayTargetPassword" \
-    -diffApply.artifactFilename="$diffArtifactFilePath" \
-    -outputType="" \
-    -licenseKey="$flywayLicenseKey" \
+    -deploy.scriptFilename="$diffArtifactFilePath" \
     -configFiles="$flywayProjectSettings" \
-    -schemaModelLocation="$flywayProjectSchemaModel" || { echo 'Flyway CLI - diffApply Command Failed' ; exit 1; }
+    -schemaModelLocation="$flywayProjectSchemaModel" || { 
+        echo 'Flyway CLI - Deploy Command Failed'
+        exit 1 
+    }
 else
     echo "Flyway CLI - Skipping Deployment Stage Due to DEPLOY_DIFFERENCES variable set to false"
 fi
 
-# Remove Temporary Artifacts - Disabled By Default, so that Pipeline tool can publish files as artifact #
-# echo "Clean Up: Deleting temporary artifact files"
-# rm -r $diffArtifactFolder
+# Remove Temporary Artifacts #
+echo "Clean Up: Deleting temporary artifact files"
+rm -r $diffArtifactFolder

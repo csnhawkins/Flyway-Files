@@ -27,7 +27,7 @@ variables:
 
   # Optional - For ephemeral agents/runners, it's necessary to validate Flyway is installed on each run. Set the below to true to enable the functionality
   FLYWAY_CLI_INSTALL_CHECK: "false" # Setting to false will skip the Flyway CLI check step
-  FLYWAY_VERSION: "10.18.2" # This outlines the version of Flyway CLI that will be downloaded if no Flyway CLI is detected on the target agent
+  FLYWAY_VERSION: "11.0.0" # This outlines the version of Flyway CLI that will be downloaded if no Flyway CLI is detected on the target agent
   REDGATE_FLYWAY_DIFF_VERB: "true" # Enables Alpha Diff Verbs within Flyway CLI
 
 stages:
