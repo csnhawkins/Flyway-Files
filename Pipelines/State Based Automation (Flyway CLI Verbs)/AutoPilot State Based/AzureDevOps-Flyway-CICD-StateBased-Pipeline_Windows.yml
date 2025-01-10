@@ -334,7 +334,12 @@ stages:
             downloadType: 'single'
             artifactName: 'Flyway-CI-$(Build.BuildId)'
             downloadPath: '$(System.ArtifactsDirectory)'
-        - script: echo "CHANGES_DETECTED is $(CHANGES_DETECTED)"
+        - task: DownloadBuildArtifacts@0
+          inputs:
+            buildType: 'current'
+            downloadType: 'single'
+            artifactName: 'Flyway-CD-Reports-$(Build.BuildId)'
+            downloadPath: '$(System.ArtifactsDirectory)'
         # Step 1 - Flyway License Authentication
         - script: |
             flyway auth -IAgreeToTheEula -email="$(FLYWAY_EMAIL)" -token="$(FLYWAY_TOKEN)"
@@ -356,7 +361,7 @@ stages:
               "-environment=$(TARGET_ENVIRONMENT)" `
               "-environments.$(TARGET_ENVIRONMENT).user=$(TARGET_DATABASE_USERNAME)" `
               "-environments.$(TARGET_ENVIRONMENT).password=$(TARGET_DATABASE_PASSWORD)" `
-              "-deploy.scriptFilename=$(System.ArtifactsDirectory)\Flyway-CI-$(Build.BuildId)\Artifact\$(SCRIPT_FILENAME)"
+              "-deploy.scriptFilename=$(System.ArtifactsDirectory)\Flyway-CD-Reports-$(Build.BuildId)\$(SCRIPT_FILENAME)"
 
   - stage: Prod
     displayName: Prod Stage
@@ -498,12 +503,18 @@ stages:
                       Write-Host "Error: Script not found at path $scriptPath"
                       exit 1
                     }
-        # Pre-Req - Download Build Artifact
+        # Pre-Req - Download Build Artifacts
         - task: DownloadBuildArtifacts@0
           inputs:
             buildType: 'current'
             downloadType: 'single'
             artifactName: 'Flyway-CI-$(Build.BuildId)'
+            downloadPath: '$(System.ArtifactsDirectory)'
+        - task: DownloadBuildArtifacts@0
+          inputs:
+            buildType: 'current'
+            downloadType: 'single'
+            artifactName: 'Flyway-CD-Reports-$(Build.BuildId)'
             downloadPath: '$(System.ArtifactsDirectory)'
         # Step 1 - Flyway License Authentication
         - script: |
@@ -518,7 +529,7 @@ stages:
         # Step 2 - Flyway - Deploy Pending migrations to target environment
         - task: PowerShell@2
           displayName: 'Flyway CLI - Deploy Changes'
-          condition: and(succeeded(), eq(variables['CHANGES_DETECTED'], 'true'))
+          condition: succeeded()
           inputs:
             targetType: 'inline'
             script: |
@@ -526,4 +537,4 @@ stages:
               "-environment=$(TARGET_ENVIRONMENT)" `
               "-environments.$(TARGET_ENVIRONMENT).user=$(TARGET_DATABASE_USERNAME)" `
               "-environments.$(TARGET_ENVIRONMENT).password=$(TARGET_DATABASE_PASSWORD)" `
-              "-deploy.scriptFilename=$(System.ArtifactsDirectory)\Flyway-CI-$(Build.BuildId)\Artifact\$(SCRIPT_FILENAME)"
+              "-deploy.scriptFilename=$(System.ArtifactsDirectory)\Flyway-CD-Reports-$(Build.BuildId)\$(SCRIPT_FILENAME)"
