@@ -293,7 +293,7 @@ stages:
       steps:
         # Optional - Manual Validation Step
         - task: ManualValidation@0
-          condition: eq(variables['pauseForCodeReview'], true)
+          condition: eq(variables['generateReport'], true)
           displayName: 'Review Change Report Prior To Release'
           timeoutInMinutes: 4320 
           inputs:
@@ -469,7 +469,7 @@ stages:
       steps:
         # Optional - Manual Validation Step
         - task: ManualValidation@0
-          condition: eq(variables['pauseForCodeReview'], true)
+          condition: eq(variables['generateReport'], true)
           displayName: 'Review Change Report Prior To Release'
           timeoutInMinutes: 4320 
           inputs:
