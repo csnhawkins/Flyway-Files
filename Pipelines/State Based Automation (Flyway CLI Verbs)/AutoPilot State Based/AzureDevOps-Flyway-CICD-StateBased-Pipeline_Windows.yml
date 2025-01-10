@@ -356,7 +356,7 @@ stages:
               "-environment=$(TARGET_ENVIRONMENT)" `
               "-environments.$(TARGET_ENVIRONMENT).user=$(TARGET_DATABASE_USERNAME)" `
               "-environments.$(TARGET_ENVIRONMENT).password=$(TARGET_DATABASE_PASSWORD)" `
-              "-deploy.scriptFilename=$(WORKING_DIRECTORY)\Artifact\$(SCRIPT_FILENAME)"
+              "-deploy.scriptFilename=$(System.ArtifactsDirectory)\Flyway-CI-$(Build.BuildId)\Artifact\$(SCRIPT_FILENAME)"
 
   - stage: Prod
     displayName: Prod Stage
@@ -526,4 +526,4 @@ stages:
               "-environment=$(TARGET_ENVIRONMENT)" `
               "-environments.$(TARGET_ENVIRONMENT).user=$(TARGET_DATABASE_USERNAME)" `
               "-environments.$(TARGET_ENVIRONMENT).password=$(TARGET_DATABASE_PASSWORD)" `
-              "-deploy.scriptFilename=$(WORKING_DIRECTORY)\Artifact\$(SCRIPT_FILENAME)"
+              "-deploy.scriptFilename=$(System.ArtifactsDirectory)\Flyway-CI-$(Build.BuildId)\Artifact\$(SCRIPT_FILENAME)"
