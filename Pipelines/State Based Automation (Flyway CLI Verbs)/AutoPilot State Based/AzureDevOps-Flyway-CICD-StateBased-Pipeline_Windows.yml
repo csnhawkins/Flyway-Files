@@ -279,7 +279,7 @@ stages:
         - task: PublishBuildArtifacts@1
           displayName: 'Publish Check Report'
           continueOnError: true
-          condition: and(succeeded(), eq(variables['generateReport'], true))
+          condition: and(succeeded(), eq(dependencies.changeReport.outputs['prepareScript.CHANGES_DETECTED'], 'true'), eq(variables['generateReport'], true))
           inputs:
             ArtifactName: 'Flyway-CD-Reports-$(Build.BuildId)'
             PathtoPublish: '$(WORKING_DIRECTORY)\Artifact\$(SCRIPT_FILENAME)'
@@ -293,7 +293,7 @@ stages:
       steps:
         # Optional - Manual Validation Step
         - task: ManualValidation@0
-          condition: eq(variables['generateReport'], true)
+          condition: eq(variables['pauseForCodeReview'], true)
           displayName: 'Review Change Report Prior To Release'
           timeoutInMinutes: 4320 
           inputs:
@@ -455,7 +455,7 @@ stages:
         - task: PublishBuildArtifacts@1
           displayName: 'Publish Check Report'
           continueOnError: true
-          condition: and(succeeded(), eq(variables['generateReport'], true))
+          condition: and(succeeded(), eq(dependencies.changeReport.outputs['prepareScript.CHANGES_DETECTED'], 'true'), eq(variables['generateReport'], true))
           inputs:
             ArtifactName: 'Flyway-CD-Reports-$(Build.BuildId)'
             PathtoPublish: '$(WORKING_DIRECTORY)\Artifact\$(SCRIPT_FILENAME)'
@@ -469,7 +469,7 @@ stages:
       steps:
         # Optional - Manual Validation Step
         - task: ManualValidation@0
-          condition: eq(variables['generateReport'], true)
+          condition: eq(variables['pauseForCodeReview'], true)
           displayName: 'Review Change Report Prior To Release'
           timeoutInMinutes: 4320 
           inputs:
