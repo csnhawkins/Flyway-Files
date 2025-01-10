@@ -253,7 +253,8 @@ stages:
             FLYWAY_EMAIL: $(FLYWAY_EMAIL)
             FLYWAY_TOKEN: $(FLYWAY_TOKEN)
         - task: PowerShell@2
-          displayName: 'Flyway CLI - Prepare Scripts'
+          name: 'prepareScript'
+          displayName: 'Flyway CLI - Prepare Script'
           condition: and(succeeded(), eq(variables['generateReport'], true))
           inputs:
             targetType: 'inline'
@@ -268,13 +269,12 @@ stages:
 
                 if ($flywayDiffs -like "*no differences detected*") {
                   Write-Host "No changes to generate. Exiting script gracefully."
-                  echo "##vso[task.setvariable variable=TEST_CHANGES_DETECTED;isOutput=false]false"
+                  echo "##vso[task.setvariable variable=CHANGES_DETECTED;isOutput=true]false"
                   exit 0  # Graceful exit
                 } else {
                   Write-Host "Changes detected. Proceeding with further steps."
-                  echo "##vso[task.setvariable variable=TEST_CHANGES_DETECTED;isOutput=false]true"
+                  echo "##vso[task.setvariable variable=CHANGES_DETECTED;isOutput=true]true"
                 }
-        - script: echo "CHANGES_DETECTED is $(TEST_CHANGES_DETECTED)"
         # Step 3 - Publish Check Report
         - task: PublishBuildArtifacts@1
           displayName: 'Publish Check Report'
@@ -288,7 +288,7 @@ stages:
     - job: CodeReview
       displayName: Code Review
       dependsOn: ChangeReport
-      condition: and(succeeded(), eq(variables['TEST_CHANGES_DETECTED'], 'true'))
+      condition: and(succeeded(), eq(dependencies.changeReport.outputs['prepareScript.CHANGES_DETECTED'], 'true'))
       pool: server
       steps:
         # Optional - Manual Validation Step
@@ -305,7 +305,7 @@ stages:
     - job: Deploy
       displayName: "Deploy"
       dependsOn: CodeReview
-      condition: and(succeeded(), eq(variables['TEST_CHANGES_DETECTED'], 'true'))
+      condition: and(succeeded(), eq(dependencies.changeReport.outputs['prepareScript.CHANGES_DETECTED'], 'true'))
       variables:
         EXAMPLE: ""
       steps:
@@ -348,7 +348,7 @@ stages:
         # Step 2 - Flyway - Deploy Pending migrations to target environment
         - task: PowerShell@2
           displayName: 'Flyway CLI - Deploy Changes'
-          condition: and(succeeded(), eq(variables['CHANGES_DETECTED'], 'true'))
+          condition: succeeded()
           inputs:
             targetType: 'inline'
             script: |
@@ -425,6 +425,7 @@ stages:
             FLYWAY_TOKEN: $(FLYWAY_TOKEN)
         - task: PowerShell@2
           displayName: 'Flyway CLI - Prepare Scripts'
+          name: 'prepareScript'
           condition: and(succeeded(), eq(variables['generateReport'], true))
           inputs:
             targetType: 'inline'
@@ -458,6 +459,7 @@ stages:
     - job: CodeReview
       displayName: Code Review
       dependsOn: ChangeReport
+      condition: and(succeeded(), eq(dependencies.changeReport.outputs['prepareScript.CHANGES_DETECTED'], 'true'))
       pool: server
       steps:
         # Optional - Manual Validation Step
@@ -474,6 +476,7 @@ stages:
     - job: Deploy
       displayName: "Deploy"
       dependsOn: CodeReview
+      condition: and(succeeded(), eq(dependencies.changeReport.outputs['prepareScript.CHANGES_DETECTED'], 'true'))
       variables:
         EXAMPLE: ""
       steps:
