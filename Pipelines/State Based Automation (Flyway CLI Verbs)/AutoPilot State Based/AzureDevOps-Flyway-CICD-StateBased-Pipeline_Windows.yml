@@ -22,8 +22,6 @@ trigger: none
 ### To Create a Libary Variable Group, Click Pipelines > Library > + Variable Group ###
 # "TARGET_DATABASE_USERNAME" - Leave Username/Password values blank if integratedSecurity utilized (Which is default behaviour)
 # "TARGET_DATABASE_PASSWORD" - Leave Username/Password values blank if integratedSecurity utilized (Which is default behaviour)
-# "REPORT_DATABASE_USERNAME" - Leave Username/Password values blank if integratedSecurity utilized (Which is default behaviour)
-# "REPORT_DATABASE_PASSWORD" - Leave Username/Password values blank if integratedSecurity utilized (Which is default behaviour)
 # "CUSTOM_PARAMS": Optional - Used for passing custom Flyway Parameters to each Flyway command
 ### End of Test Stage Variable Group ###
 
@@ -31,8 +29,6 @@ trigger: none
 ### To Create a Libary Variable Group, Click Pipelines > Library > + Variable Group ###
 # "TARGET_DATABASE_USERNAME" - Leave Username/Password values blank if integratedSecurity utilized (Which is default behaviour)
 # "TARGET_DATABASE_PASSWORD" - Leave Username/Password values blank if integratedSecurity utilized (Which is default behaviour)
-# "REPORT_DATABASE_USERNAME" - Leave Username/Password values blank if integratedSecurity utilized (Which is default behaviour)
-# "REPORT_DATABASE_PASSWORD" - Leave Username/Password values blank if integratedSecurity utilized (Which is default behaviour)
 # "CUSTOM_PARAMS": Optional - Used for passing custom Flyway Parameters to each Flyway command
 ### End of Prod Stage Variable Group ###
 
@@ -141,13 +137,17 @@ stages:
                 "-prepare.scriptFilename=$(WORKING_DIRECTORY)\Artifact\$(SCRIPT_FILENAME)" `
                 -configFiles="$(WORKING_DIRECTORY)\flyway.toml" | Tee-Object -Variable flywayDiffs  # Capture Flyway Diff output to variable flywayDiffs and show output in console
 
-                if ($flywayDiffs -like "*no differences detected*") {
+                # Check if the prepare command succeeded and handle logic accordingly
+                if ($LASTEXITCODE -eq 0 -and $flywayDiffs -like "*no differences detected*") {
                   Write-Host "No changes to generate. Exiting script gracefully."
                   echo "##vso[task.setvariable variable=CHANGES_DETECTED]false"
                   exit 0  # Graceful exit
-                } else {
+                } elseif ($LASTEXITCODE -eq 0) {
                   Write-Host "Changes detected. Proceeding with further steps."
                   echo "##vso[task.setvariable variable=CHANGES_DETECTED]true"
+                } else {
+                  Write-Host "Error: The flyway prepare command failed. Exiting script with error."
+                  exit 1  # Exit with error
                 }
         # Step 3 - Deploy: Deploy changes to target environment
         - task: PowerShell@2
@@ -207,6 +207,8 @@ stages:
         value: $[coalesce(variables['CUSTOM_PARAMS'], '')] # Secure method of adding custom Flyway Parameters (Example -X for debug). Default value of '' used if no Custom Params found.'
       - name: generateReport
         value: "true" # Turn to false to skip the CHECK report stage tasks
+      - name: pauseForCodeReview
+        value: "false"
       - name: FLYWAY_CHECK_DRIFT_ON_MIGRATE
         value: "$(FLYWAY_DRIFT_ON_MIGRATE)" # Setting this variable to true will enable the Flyway Pipelines drift detection
     jobs:
@@ -236,6 +238,7 @@ stages:
                     }
         # Pre-Req - Download Build Artifact
         - task: DownloadBuildArtifacts@0
+          displayName: 'Download Build Artifact'
           condition: eq(variables['generateReport'], true)
           inputs:
             buildType: 'current'
@@ -267,19 +270,25 @@ stages:
                 "-prepare.scriptFilename=$(WORKING_DIRECTORY)\Artifact\$(SCRIPT_FILENAME)" `
                 -configFiles="$(WORKING_DIRECTORY)\flyway.toml" | Tee-Object -Variable flywayDiffs  # Capture Flyway Diff output to variable flywayDiffs and show output in console
 
-                if ($flywayDiffs -like "*no differences detected*") {
+                # Check if the prepare command succeeded and handle logic accordingly
+                if ($LASTEXITCODE -eq 0 -and $flywayDiffs -like "*no differences detected*") {
                   Write-Host "No changes to generate. Exiting script gracefully."
-                  echo "##vso[task.setvariable variable=CHANGES_DETECTED;isOutput=true]false"
+                  Write-Host "##vso[task.setvariable variable=CHANGES_DETECTED;isOutput=true]false"
+                  Write-Host "##vso[task.setvariable variable=CHANGES_DETECTED_LOCAL]false"
                   exit 0  # Graceful exit
-                } else {
+                } elseif ($LASTEXITCODE -eq 0) {
                   Write-Host "Changes detected. Proceeding with further steps."
-                  echo "##vso[task.setvariable variable=CHANGES_DETECTED;isOutput=true]true"
+                  Write-Host "##vso[task.setvariable variable=CHANGES_DETECTED;isOutput=true]true"
+                  Write-Host "##vso[task.setvariable variable=CHANGES_DETECTED_LOCAL]true"
+                } else {
+                  Write-Host "Error: The flyway prepare command failed. Exiting script with error."
+                  exit 1  # Exit with error
                 }
         # Step 3 - Publish Check Report
         - task: PublishBuildArtifacts@1
           displayName: 'Publish Check Report'
           continueOnError: true
-          condition: and(succeeded(), eq(variables['CHANGES_DETECTED'], true), eq(variables['generateReport'], true))
+          condition: and(succeeded(), eq(variables['CHANGES_DETECTED_LOCAL'], 'true'), eq(variables['generateReport'], true))
           inputs:
             ArtifactName: 'Flyway-CD-Reports-$(Build.BuildId)'
             PathtoPublish: '$(WORKING_DIRECTORY)\Artifact\$(SCRIPT_FILENAME)'
@@ -329,12 +338,14 @@ stages:
                     }
         # Pre-Req - Download Build Artifact
         - task: DownloadBuildArtifacts@0
+          displayName: 'Download Build Artifact'
           inputs:
             buildType: 'current'
             downloadType: 'single'
             artifactName: 'Flyway-CI-$(Build.BuildId)'
             downloadPath: '$(System.ArtifactsDirectory)'
         - task: DownloadBuildArtifacts@0
+          displayName: 'Download Deployment Artifact'
           inputs:
             buildType: 'current'
             downloadType: 'single'
@@ -383,6 +394,8 @@ stages:
         value: $[coalesce(variables['CUSTOM_PARAMS'], '')] # Secure method of adding custom Flyway Parameters (Example -X for debug). Default value of '' used if no Custom Params found.'
       - name: generateReport
         value: "true" # Turn to false to skip the CHECK report stage tasks
+      - name: pauseForCodeReview
+        value: "true"
       - name: FLYWAY_CHECK_DRIFT_ON_MIGRATE
         value: "$(FLYWAY_DRIFT_ON_MIGRATE)" # Setting this variable to true will enable the Flyway Pipelines drift detection
     jobs:
@@ -412,6 +425,7 @@ stages:
                     }
         # Pre-Req - Download Build Artifact
         - task: DownloadBuildArtifacts@0
+          displayName: 'Download Build Artifact'
           condition: eq(variables['generateReport'], true)
           inputs:
             buildType: 'current'
@@ -443,19 +457,25 @@ stages:
                 "-prepare.scriptFilename=$(WORKING_DIRECTORY)\Artifact\$(SCRIPT_FILENAME)" `
                 -configFiles="$(WORKING_DIRECTORY)\flyway.toml" | Tee-Object -Variable flywayDiffs  # Capture Flyway Diff output to variable flywayDiffs and show output in console
 
-                if ($flywayDiffs -like "*no differences detected*") {
+                # Check if the prepare command succeeded and handle logic accordingly
+                if ($LASTEXITCODE -eq 0 -and $flywayDiffs -like "*no differences detected*") {
                   Write-Host "No changes to generate. Exiting script gracefully."
-                  echo "##vso[task.setvariable variable=CHANGES_DETECTED;isOutput=true]false"
+                  Write-Host "##vso[task.setvariable variable=CHANGES_DETECTED;isOutput=true]false"
+                  Write-Host "##vso[task.setvariable variable=CHANGES_DETECTED_LOCAL]false"
                   exit 0  # Graceful exit
-                } else {
+                } elseif ($LASTEXITCODE -eq 0) {
                   Write-Host "Changes detected. Proceeding with further steps."
-                  echo "##vso[task.setvariable variable=CHANGES_DETECTED;isOutput=true]true"
+                  Write-Host "##vso[task.setvariable variable=CHANGES_DETECTED;isOutput=true]true"
+                  Write-Host "##vso[task.setvariable variable=CHANGES_DETECTED_LOCAL]true"
+                } else {
+                  Write-Host "Error: The flyway prepare command failed. Exiting script with error."
+                  exit 1  # Exit with error
                 }
         # Step 3 - Publish Check Report
         - task: PublishBuildArtifacts@1
           displayName: 'Publish Check Report'
           continueOnError: true
-          condition: and(succeeded(), eq(variables['CHANGES_DETECTED'], true), eq(variables['generateReport'], true))
+          condition: and(succeeded(), eq(variables['CHANGES_DETECTED_LOCAL'], 'true'), eq(variables['generateReport'], true))
           inputs:
             ArtifactName: 'Flyway-CD-Reports-$(Build.BuildId)'
             PathtoPublish: '$(WORKING_DIRECTORY)\Artifact\$(SCRIPT_FILENAME)'
@@ -505,12 +525,14 @@ stages:
                     }
         # Pre-Req - Download Build Artifacts
         - task: DownloadBuildArtifacts@0
+          displayName: 'Download Build Artifact'
           inputs:
             buildType: 'current'
             downloadType: 'single'
             artifactName: 'Flyway-CI-$(Build.BuildId)'
             downloadPath: '$(System.ArtifactsDirectory)'
         - task: DownloadBuildArtifacts@0
+          displayName: 'Download Deployment Artifact'
           inputs:
             buildType: 'current'
             downloadType: 'single'
