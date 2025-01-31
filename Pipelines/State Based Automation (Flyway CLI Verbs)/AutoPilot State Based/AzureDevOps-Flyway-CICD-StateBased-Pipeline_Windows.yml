@@ -2,15 +2,23 @@
 
 name: Flyway-AutoPilot-Simple-Pipeline-Windows
 
-trigger: none
-#   branches:
-#     include:
-#       - release
-#   paths:
-#     include:
-#       - migrations/*
+trigger:
+  branches:
+    include:
+      - release
+  paths:
+    include:
+      - schema-model/*
 
 # Step 1: Stage Variables - So that all variables are kept secure, it's recommended that Library Variable Groups are used.
+### Global Stage Variables - Create 'AutoPilotGlobal' Variable Group ###
+### To Create a Libary Variable Group, Click Pipelines > Library > + Variable Group ###
+# "FLYWAY_EMAIL" - Enter the email address linked to the Redgate Account that created the PAT
+# "FLYWAY_TOKEN" - Enter the PAT Value (This should be treated like a password and thus as a secure variable. Consider using a Library Group or Secure Variable for this value)
+# "AGENT_POOL" - To be set to the agent pool name to be used
+# "FLYWAY_AUTH_DISABLED" (Optional) - Create and set to true to skip the auth check stage
+### End of Global Stage Variable Group ###
+
 ### Build Stage Variables - Create 'AutoPilotBuild' Variable Group ###
 ### To Create a Libary Variable Group, Click Pipelines > Library > + Variable Group ###
 # "TARGET_DATABASE_USERNAME"- Leave Username/Password values blank if integratedSecurity utilized (Which is default behaviour)
@@ -47,7 +55,7 @@ variables:
   
   # Step 2 - Securely authenticating Flyway with PATs #
   ### To Create a Libary Variable Group, Click Pipelines > Library > + Variable Group ###
-  group: "AutoPilotGlobal" # FLYWAY_EMAIL/FLYWAY_TOKEN/AGENT_POOL (See below for examples)
+  group: "AutoPilotGlobal" # FLYWAY_EMAIL/FLYWAY_TOKEN/AGENT_POOL/ (See below for examples)
   # Personal Access Tokens (PATs) are the recommended method of authorizing Flyway during a non-interactive session
   # Details on how to do this can be found here: https://documentation.red-gate.com/flyway/flyway-cli-and-api/tutorials/tutorial-personal-access-tokens
   # Documentation on all available Authentication methods can be found here: https://documentation.red-gate.com/fd/flyway-licensing-263061944.html
@@ -118,7 +126,7 @@ stages:
           continueOnError: false
           workingDirectory: '$(WORKING_DIRECTORY)'
           displayName: 'Flyway Authentication'
-          condition: eq(variables['EXECUTE_BUILD'], true)
+          condition: and(eq(variables['EXECUTE_BUILD'], true), ne(variables['FLYWAY_AUTH_DISABLED'], true))
           env:
             FLYWAY_EMAIL: $(FLYWAY_EMAIL)
             FLYWAY_TOKEN: $(FLYWAY_TOKEN)
@@ -251,7 +259,7 @@ stages:
           continueOnError: false
           workingDirectory: '$(WORKING_DIRECTORY)'
           displayName: 'Flyway Authentication'
-          condition: and(succeeded(), eq(variables['generateReport'], true))
+          condition: and(succeeded(), eq(variables['generateReport'], true), ne(variables['FLYWAY_AUTH_DISABLED'], true))
           env:
             FLYWAY_EMAIL: $(FLYWAY_EMAIL)
             FLYWAY_TOKEN: $(FLYWAY_TOKEN)
@@ -357,7 +365,7 @@ stages:
           continueOnError: false
           workingDirectory: '$(WORKING_DIRECTORY)'
           displayName: 'Flyway Authentication'
-          condition: succeeded()
+          condition: and(succeeded(), ne(variables['FLYWAY_AUTH_DISABLED'], true))
           env:
             FLYWAY_EMAIL: $(FLYWAY_EMAIL)
             FLYWAY_TOKEN: $(FLYWAY_TOKEN)
@@ -383,7 +391,7 @@ stages:
       - group: "AutoPilotTest" # Expected Variables - TARGET_DATABASE_URL/TARGET_DATABASE_USER/TARGET_DATABASE_PASSWORD/REPORT_DATABASE_URL/REPORT_DATABASE_USER/REPORT_DATABASE_PASSWORD
       # Example Variable syntax if required. Sensitive values should ALWAYS be kept secure
       - name: DATABASE_NAME
-        value: "AutoPilotTest"
+        value: "AutoPilotProd"
       - name: SOURCE_ENVIRONMENT
         value: "schemaModel"
       - name: TARGET_ENVIRONMENT # This variable refers to the environment name present in the Flyway Projects TOML file.
@@ -438,7 +446,7 @@ stages:
           continueOnError: false
           workingDirectory: '$(WORKING_DIRECTORY)'
           displayName: 'Flyway Authentication'
-          condition: and(succeeded(), eq(variables['generateReport'], true))
+          condition: and(succeeded(), eq(variables['generateReport'], true), ne(variables['FLYWAY_AUTH_DISABLED'], true))
           env:
             FLYWAY_EMAIL: $(FLYWAY_EMAIL)
             FLYWAY_TOKEN: $(FLYWAY_TOKEN)
@@ -544,7 +552,7 @@ stages:
           continueOnError: false
           workingDirectory: '$(WORKING_DIRECTORY)'
           displayName: 'Flyway Authentication'
-          condition: succeeded()
+          condition: and(succeeded(), ne(variables['FLYWAY_AUTH_DISABLED'], true))
           env:
             FLYWAY_EMAIL: $(FLYWAY_EMAIL)
             FLYWAY_TOKEN: $(FLYWAY_TOKEN)
