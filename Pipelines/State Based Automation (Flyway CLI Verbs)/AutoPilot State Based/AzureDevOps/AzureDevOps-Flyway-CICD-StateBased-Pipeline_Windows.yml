@@ -1,14 +1,15 @@
 # This is a best practice Flyway Enterprise workflow to help you get started with Azure DevOps and a Windows Runner
 
-name: Flyway-AutoPilot-Simple-Pipeline-Windows
+name: Flyway-AutoPilot-Simple-State-Pipeline-Windows
 
-trigger:
-  branches:
-    include:
-      - release
-  paths:
-    include:
-      - schema-model/*
+# Uncomment and remove the word 'none' to enable triggers on specific branches or paths:
+trigger: none
+#   branches:
+#     include:
+#       - release
+#   paths:
+#     include:
+#       - schema-model/*
 
 # Step 1: Stage Variables - So that all variables are kept secure, it's recommended that Library Variable Groups are used.
 ### Global Stage Variables - Create 'AutoPilotGlobal' Variable Group ###
@@ -62,9 +63,6 @@ variables:
   # "FLYWAY_EMAIL" - Enter the email address linked to the Redgate Account that created the PAT
   # "FLYWAY_TOKEN" - Enter the PAT Value (This should be treated like a password and thus as a secure variable. Consider using a Library Group or Secure Variable for this value)
   ### End of AutoPilotGlobal Variable Group Creation ###
-
-  BASELINE_VERSION: "001" # This should match the version number of your baseline script
-  FIRST_UNDO_SCRIPT: "002" # This should match the first undo version in your project
 
   # Optional - For ephemeral agents/runners, it's necessary to validate Flyway is installed on each run. Set the below to true to enable the functionality
   FLYWAY_CLI_INSTALL_CHECK: "false" # Setting to false will skip the Flyway CLI check step
