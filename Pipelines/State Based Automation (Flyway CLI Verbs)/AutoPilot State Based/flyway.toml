@@ -2,6 +2,28 @@ databaseType = "SqlServer"
 id = "cee15467-eeac-4697-95b1-d55ebf1cf896"
 name = "Autopilot - State Based"
 
+[environments.development]
+url = "jdbc:sqlserver://localhost;databaseName=AutoPilotDev;encrypt=true;integratedSecurity=true;trustServerCertificate=true"
+displayName = "Development database"
+
+[environments.Prod]
+url = "jdbc:sqlserver://localhost;databaseName=AutoPilotProd;encrypt=true;integratedSecurity=true;trustServerCertificate=true"
+displayName = "Production Database"
+
+[environments.Test]
+url = "jdbc:sqlserver://localhost;databaseName=AutoPilotTest;encrypt=true;integratedSecurity=true;trustServerCertificate=true"
+displayName = "Test database"
+
+[environments.Check]
+url = "jdbc:sqlserver://localhost;databaseName=AutoPilotCheck;encrypt=true;integratedSecurity=true;trustServerCertificate=true"
+displayName = "Check (Reporting) database"
+provisioner = "clean"
+
+[environments.Build]
+url = "jdbc:sqlserver://localhost;databaseName=AutoPilotBuild;encrypt=true;integratedSecurity=true;trustServerCertificate=true"
+displayName = "Build database"
+provisioner = "clean"
+
 [flyway]
 defaultSchema = "dbo"
 locations = [ "filesystem:migrations" ]
@@ -9,12 +31,12 @@ mixed = true
 outOfOrder = true
 schemaModelLocation = "schema-model"
 validateMigrationNaming = true
+sqlserver.clean.mode = "all"
+sqlserver.clean.schemas.exclude = ["ExampleSchema1", "ExampleSchema2"] 
 
-  [flyway.check]
-  majorTolerance = 0
+[flyway.check]
+majorTolerance = 0
 
-[flyway.sqlserver.clean]
-mode = "all"
 
 [flywayDesktop]
 developmentEnvironment = "development"
@@ -117,6 +139,3 @@ reseedIdentityColumns = false
 skipIntegrityChecksForForeignKeys = false
 transportClrDataTypesAsBinary = false
 
-[environments.development]
-url = "jdbc:sqlserver://localhost;databaseName=AutoPilotDev;encrypt=true;integratedSecurity=true;trustServerCertificate=true"
-displayName = "Development database"
