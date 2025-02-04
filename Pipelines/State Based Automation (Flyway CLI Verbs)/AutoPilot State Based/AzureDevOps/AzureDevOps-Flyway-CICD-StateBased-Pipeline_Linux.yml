@@ -44,7 +44,7 @@ trigger: none
 pool:
   # Step 2 - Set which Agent Pool is to be used #
   name: "$(AGENT_POOL)" # To be set when a self-hosted agent pool is to be used alongside this pipeline
-  #vmImage: "windows-latest" # To be used when a microsoft-hosted agent is used alongside this pipeline (Such as ubuntu-latest/windows-latest)
+  #vmImage: "ubuntu-latest" # To be used when a microsoft-hosted agent is used alongside this pipeline (Such as ubuntu-latest/windows-latest)
 
 variables:
 
@@ -65,7 +65,7 @@ variables:
   ### End of AutoPilotGlobal Variable Group Creation ###
 
   # Optional - For ephemeral agents/runners, it's necessary to validate Flyway is installed on each run. Set the below to true to enable the functionality
-  FLYWAY_CLI_INSTALL_CHECK: "false" # Setting to false will skip the Flyway CLI check step
+  FLYWAY_CLI_INSTALL_CHECK: "true" # Setting to false will skip the Flyway CLI check step
   FLYWAY_VERSION: "Latest" # This outlines the version of Flyway CLI that will be downloaded if no Flyway CLI is detected on the target agent (Examples - '11.0.0' for specific version. Or 'Latest' for latest version)
   FLYWAY_INSTALL_DIRECTORY: "" # The path on the agent machine where Flyway CLI will be installed
 
@@ -109,7 +109,7 @@ stages:
             filePath: '$(WORKING_DIRECTORY)/Scripts/Flyway_DownloadAndInstallCLI_Unix.sh'
         # Step 1 - Flyway License Authentication
         - script: |
-            flyway auth -IAgreeToTheEula -email="${FLYWAY_EMAIL}" -token="${FLYWAY_TOKEN}"
+            flyway auth -IAgreeToTheEula -email="$(FLYWAY_EMAIL)" -token="$(FLYWAY_TOKEN)"
           continueOnError: false
           workingDirectory: '$(WORKING_DIRECTORY)'
           displayName: 'Flyway Authentication'
@@ -120,13 +120,17 @@ stages:
         # Step 2 - Prepare: Detect differences and create deployment script
         - script: |
             # Run Flyway prepare command and capture output
+            echo "Flyway CLI - Detecting differences between $(SOURCE_ENVIRONMENT) and $(TARGET_ENVIRONMENT)"
               flywayDiffs=$(flyway prepare \
-                "-prepare.source=${SOURCE_ENVIRONMENT}" \
-                "-prepare.target=${TARGET_ENVIRONMENT}" \
-                "-environments.${TARGET_ENVIRONMENT}.user=${TARGET_DATABASE_USERNAME}" \
-                "-environments.${TARGET_ENVIRONMENT}.password=${TARGET_DATABASE_PASSWORD}" \
-                "-prepare.scriptFilename=${WORKING_DIRECTORY}/Artifact/${SCRIPT_FILENAME}" \
-                -configFiles="${WORKING_DIRECTORY}/flyway.toml" 2>&1)
+                -prepare.source="$(SOURCE_ENVIRONMENT)" \
+                -prepare.target="$(TARGET_ENVIRONMENT)" \
+                -environments.Build.user="$(TARGET_DATABASE_USERNAME)" \
+                -environments.Build.password="$(TARGET_DATABASE_PASSWORD)" \
+                -prepare.scriptFilename="$(WORKING_DIRECTORY)/Artifact/$(SCRIPT_FILENAME)" \
+                -prepare.force="true" \
+                -configFiles="$(WORKING_DIRECTORY)/flyway.toml" \
+                -schemaModelLocation="$(WORKING_DIRECTORY)/schema-model" \
+                 $(CUSTOM_PARAMS) 2>&1)
 
               # Capture exit code
               EXIT_CODE=$?
@@ -159,11 +163,13 @@ stages:
           inputs:
             targetType: 'inline'
             script: |
+              echo "Flyway CLI - Deploying differences to: $(TARGET_ENVIRONMENT)"
               flyway deploy \
-                "-environment=${TARGET_ENVIRONMENT}" \
-                "-environments.${TARGET_ENVIRONMENT}.user=${TARGET_DATABASE_USERNAME}" \
-                "-environments.${TARGET_ENVIRONMENT}.password=${TARGET_DATABASE_PASSWORD}" \
-                "-deploy.scriptFilename=${WORKING_DIRECTORY}/Artifact/${SCRIPT_FILENAME}"
+                -environment="$(TARGET_ENVIRONMENT)" \
+                -environments.Build.user="$(TARGET_DATABASE_USERNAME)" \
+                -environments.Build.password="$(TARGET_DATABASE_PASSWORD)" \
+                -deploy.scriptFilename="$(WORKING_DIRECTORY)/Artifact/$(SCRIPT_FILENAME)" \
+                $(CUSTOM_PARAMS)
 
         # ADO - Copy in-scope build files to artifact directory 
         - task: CopyFiles@2
@@ -240,7 +246,7 @@ stages:
             downloadPath: '$(System.ArtifactsDirectory)'
         # Step 1 - Flyway License Authentication
         - script: |
-            flyway auth -IAgreeToTheEula -email="${FLYWAY_EMAIL}" -token="${FLYWAY_TOKEN}"
+            flyway auth -IAgreeToTheEula -email="$(FLYWAY_EMAIL)" -token="$(FLYWAY_TOKEN)"
           continueOnError: false
           workingDirectory: '$(WORKING_DIRECTORY)'
           displayName: 'Flyway Authentication'
@@ -256,13 +262,15 @@ stages:
             targetType: 'inline'
             script: |
               # Run Flyway prepare command and capture output
+              echo "Flyway CLI - Detecting differences between $(SOURCE_ENVIRONMENT) and $(TARGET_ENVIRONMENT)"
               flywayDiffs=$(flyway prepare \
-                "-prepare.source=${SOURCE_ENVIRONMENT}" \
-                "-prepare.target=${TARGET_ENVIRONMENT}" \
-                "-environments.${TARGET_ENVIRONMENT}.user=${TARGET_DATABASE_USERNAME}" \
-                "-environments.${TARGET_ENVIRONMENT}.password=${TARGET_DATABASE_PASSWORD}" \
-                "-prepare.scriptFilename=${WORKING_DIRECTORY}/Artifact/${SCRIPT_FILENAME}" \
-                -configFiles="${WORKING_DIRECTORY}/flyway.toml" 2>&1)
+                "-prepare.source=$(SOURCE_ENVIRONMENT)" \
+                "-prepare.target=$(TARGET_ENVIRONMENT)" \
+                "-environments.$(TARGET_ENVIRONMENT).user=$(TARGET_DATABASE_USERNAME)" \
+                "-environments.$(TARGET_ENVIRONMENT).password=$(TARGET_DATABASE_PASSWORD)" \
+                "-prepare.scriptFilename=$(WORKING_DIRECTORY)/Artifact/$(SCRIPT_FILENAME)" \
+                -configFiles="$(WORKING_DIRECTORY)/flyway.toml" \
+                $(CUSTOM_PARAMS) 2>&1)
 
               # Capture exit code
               EXIT_CODE=$?
@@ -342,7 +350,7 @@ stages:
             downloadPath: '$(System.ArtifactsDirectory)'
         # Step 1 - Flyway License Authentication
         - script: |
-            flyway auth -IAgreeToTheEula -email="${FLYWAY_EMAIL}" -token="${FLYWAY_TOKEN}"
+            flyway auth -IAgreeToTheEula -email="$(FLYWAY_EMAIL)" -token="$(FLYWAY_TOKEN)"
           continueOnError: false
           workingDirectory: '$(WORKING_DIRECTORY)'
           displayName: 'Flyway Authentication'
@@ -357,11 +365,13 @@ stages:
           inputs:
             targetType: 'inline'
             script: |
+              echo "Flyway CLI - Deploying differences to: $(TARGET_ENVIRONMENT)"
               flyway deploy \
-                "-environment=${TARGET_ENVIRONMENT}" \
-                "-environments.${TARGET_ENVIRONMENT}.user=${TARGET_DATABASE_USERNAME}" \
-                "-environments.${TARGET_ENVIRONMENT}.password=${TARGET_DATABASE_PASSWORD}" \
-                "-deploy.scriptFilename=${SYSTEM_ARTIFACTSDIRECTORY}/Flyway-CD-Reports-$(Build.BuildId)/${SCRIPT_FILENAME}"
+                "-environment=$(TARGET_ENVIRONMENT)" \
+                "-environments.$(TARGET_ENVIRONMENT).user=$(TARGET_DATABASE_USERNAME)" \
+                "-environments.$(TARGET_ENVIRONMENT).password=$(TARGET_DATABASE_PASSWORD)" \
+                "-deploy.scriptFilename=$(System.ArtifactsDirectory)/Flyway-CD-Reports-$(Build.BuildId)/$(SCRIPT_FILENAME)" \
+                $(CUSTOM_PARAMS)
 
   - stage: Prod
     displayName: Prod Stage
@@ -412,7 +422,7 @@ stages:
             downloadPath: '$(System.ArtifactsDirectory)'
         # Step 1 - Flyway License Authentication
         - script: |
-            flyway auth -IAgreeToTheEula -email="${FLYWAY_EMAIL}" -token="${FLYWAY_TOKEN}"
+            flyway auth -IAgreeToTheEula -email="$(FLYWAY_EMAIL)" -token="$(FLYWAY_TOKEN)"
           continueOnError: false
           workingDirectory: '$(WORKING_DIRECTORY)'
           displayName: 'Flyway Authentication'
@@ -428,13 +438,15 @@ stages:
             targetType: 'inline'
             script: |
               # Run Flyway prepare command and capture output
+              echo "Flyway CLI - Detecting differences between $(SOURCE_ENVIRONMENT) and $(TARGET_ENVIRONMENT)"
               flywayDiffs=$(flyway prepare \
-                "-prepare.source=${SOURCE_ENVIRONMENT}" \
-                "-prepare.target=${TARGET_ENVIRONMENT}" \
-                "-environments.${TARGET_ENVIRONMENT}.user=${TARGET_DATABASE_USERNAME}" \
-                "-environments.${TARGET_ENVIRONMENT}.password=${TARGET_DATABASE_PASSWORD}" \
-                "-prepare.scriptFilename=${WORKING_DIRECTORY}/Artifact/${SCRIPT_FILENAME}" \
-                -configFiles="${WORKING_DIRECTORY}/flyway.toml" 2>&1)
+                "-prepare.source=$(SOURCE_ENVIRONMENT)" \
+                "-prepare.target=$(TARGET_ENVIRONMENT)" \
+                "-environments.$(TARGET_ENVIRONMENT).user=$(TARGET_DATABASE_USERNAME)" \
+                "-environments.$(TARGET_ENVIRONMENT).password=$(TARGET_DATABASE_PASSWORD)" \
+                "-prepare.scriptFilename=$(WORKING_DIRECTORY)/Artifact/$(SCRIPT_FILENAME)" \
+                -configFiles="$(WORKING_DIRECTORY)/flyway.toml" \
+                $(CUSTOM_PARAMS) 2>&1)
 
               # Capture exit code
               EXIT_CODE=$?
@@ -514,7 +526,7 @@ stages:
             downloadPath: '$(System.ArtifactsDirectory)'
         # Step 1 - Flyway License Authentication
         - script: |
-            flyway auth -IAgreeToTheEula -email="${FLYWAY_EMAIL}" -token="${FLYWAY_TOKEN}"
+            flyway auth -IAgreeToTheEula -email="$(FLYWAY_EMAIL)" -token="$(FLYWAY_TOKEN)"
           continueOnError: false
           workingDirectory: '$(WORKING_DIRECTORY)'
           displayName: 'Flyway Authentication'
@@ -529,8 +541,10 @@ stages:
           inputs:
             targetType: 'inline'
             script: |
+              echo "Flyway CLI - Deploying differences to: $(TARGET_ENVIRONMENT)"
               flyway deploy \
-                "-environment=${TARGET_ENVIRONMENT}" \
-                "-environments.${TARGET_ENVIRONMENT}.user=${TARGET_DATABASE_USERNAME}" \
-                "-environments.${TARGET_ENVIRONMENT}.password=${TARGET_DATABASE_PASSWORD}" \
-                "-deploy.scriptFilename=${SYSTEM_ARTIFACTSDIRECTORY}/Flyway-CD-Reports-$(Build.BuildId)/${SCRIPT_FILENAME}"
+                "-environment=$(TARGET_ENVIRONMENT)" \
+                "-environments.$(TARGET_ENVIRONMENT).user=$(TARGET_DATABASE_USERNAME)" \
+                "-environments.$(TARGET_ENVIRONMENT).password=$(TARGET_DATABASE_PASSWORD)" \
+                "-deploy.scriptFilename=$(System.ArtifactsDirectory)/Flyway-CD-Reports-$(Build.BuildId)/$(SCRIPT_FILENAME)" \
+                $(CUSTOM_PARAMS)
