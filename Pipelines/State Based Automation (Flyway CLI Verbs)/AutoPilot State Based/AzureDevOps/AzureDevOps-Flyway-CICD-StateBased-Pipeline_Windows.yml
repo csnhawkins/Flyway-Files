@@ -141,7 +141,9 @@ stages:
                 "-environments.$(TARGET_ENVIRONMENT).user=$(TARGET_DATABASE_USERNAME)" `
                 "-environments.$(TARGET_ENVIRONMENT).password=$(TARGET_DATABASE_PASSWORD)" `
                 "-prepare.scriptFilename=$(WORKING_DIRECTORY)\Artifact\$(SCRIPT_FILENAME)" `
-                -configFiles="$(WORKING_DIRECTORY)\flyway.toml" | Tee-Object -Variable flywayDiffs  # Capture Flyway Diff output to variable flywayDiffs and show output in console
+                "-prepare.force=true" `
+                -configFiles="$(WORKING_DIRECTORY)\flyway.toml" `
+                -schemaModelLocation="$(WORKING_DIRECTORY)\schema-model" | Tee-Object -Variable flywayDiffs  # Capture Flyway Diff output to variable flywayDiffs and show output in console
 
                 # Check if the prepare command succeeded and handle logic accordingly
                 if ($LASTEXITCODE -eq 0 -and $flywayDiffs -like "*no differences detected*") {
@@ -274,7 +276,9 @@ stages:
                 "-environments.$(TARGET_ENVIRONMENT).user=$(TARGET_DATABASE_USERNAME)" `
                 "-environments.$(TARGET_ENVIRONMENT).password=$(TARGET_DATABASE_PASSWORD)" `
                 "-prepare.scriptFilename=$(WORKING_DIRECTORY)\Artifact\$(SCRIPT_FILENAME)" `
-                -configFiles="$(WORKING_DIRECTORY)\flyway.toml" | Tee-Object -Variable flywayDiffs  # Capture Flyway Diff output to variable flywayDiffs and show output in console
+                "-prepare.force=true" `
+                -configFiles="$(WORKING_DIRECTORY)\flyway.toml" `
+                -schemaModelLocation="$(WORKING_DIRECTORY)\schema-model" | Tee-Object -Variable flywayDiffs  # Capture Flyway Diff output to variable flywayDiffs and show output in console
 
                 # Check if the prepare command succeeded and handle logic accordingly
                 if ($LASTEXITCODE -eq 0 -and $flywayDiffs -like "*no differences detected*") {
@@ -461,7 +465,9 @@ stages:
                 "-environments.$(TARGET_ENVIRONMENT).user=$(TARGET_DATABASE_USERNAME)" `
                 "-environments.$(TARGET_ENVIRONMENT).password=$(TARGET_DATABASE_PASSWORD)" `
                 "-prepare.scriptFilename=$(WORKING_DIRECTORY)\Artifact\$(SCRIPT_FILENAME)" `
-                -configFiles="$(WORKING_DIRECTORY)\flyway.toml" | Tee-Object -Variable flywayDiffs  # Capture Flyway Diff output to variable flywayDiffs and show output in console
+                "-prepare.force=true" `
+                -configFiles="$(WORKING_DIRECTORY)\flyway.toml" `
+                -schemaModelLocation="$(WORKING_DIRECTORY)\schema-model" | Tee-Object -Variable flywayDiffs  # Capture Flyway Diff output to variable flywayDiffs and show output in console
 
                 # Check if the prepare command succeeded and handle logic accordingly
                 if ($LASTEXITCODE -eq 0 -and $flywayDiffs -like "*no differences detected*") {
